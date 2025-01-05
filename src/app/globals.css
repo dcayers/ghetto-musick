@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+.react-aria-DropIndicator[data-drop-target] {
+  @apply outline outline-1 outline-primary-300 my-2
+}
