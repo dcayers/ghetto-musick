@@ -1,0 +1,111 @@
+// FlowGraph schema.
+//
+// Migration sequence follows plan §23.2. This is step 1 (identity, workspace)
+// and step 2 (track), which is what the Phase 0 vertical slice needs. Graph,
+// transition, marker, and set models follow in later migrations.
+//
+// IDs are UUIDv7 generated application-side — ADR-0003. Prisma has no default
+// for that, which is deliberate: `newId()` from @flowgraph/contracts is the
+// only generator, so the bridge and web app can mint IDs offline too.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+// Prisma 7 removed `url` from the datasource block. The connection string for
+// Migrate now lives in ../prisma.config.ts, and the runtime client connects
+// through a driver adapter (@prisma/adapter-pg). See ADR-0008.
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Identity and tenancy ---------------------------------------------------
+
+model Workspace {
+  id        String   @id @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members WorkspaceMember[]
+  tracks  Track[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id          String   @id @db.Uuid
+  email       String   @unique
+  displayName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships WorkspaceMember[]
+
+  @@map("users")
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+// Every resource hangs off a Workspace rather than a User, even though MVP
+// creates exactly one personal workspace per user (plan §7.1). Retrofitting
+// tenancy later is brutal; a single OWNER row costs nothing now.
+model WorkspaceMember {
+  id          String        @id @db.Uuid
+  workspaceId String        @db.Uuid
+  userId      String        @db.Uuid
+  role        WorkspaceRole @default(OWNER)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+// --- Track library ----------------------------------------------------------
+
+model Track {
+  id String @id @db.Uuid
+
+  workspaceId String @db.Uuid
+
+  title  String
+  artist String
+
+  // Decimal, not Float — plan §7.2. BPM participates in exact comparisons
+  // (transition tempo windows, duplicate detection) where binary float drift
+  // produces wrong answers.
+  bpm Decimal? @db.Decimal(6, 2)
+
+  // Camelot notation, e.g. "8A". Validated at the contract boundary.
+  keySignature  String?
+  timeSignature String?
+
+  tags String[]
+
+  // Optimistic concurrency for PATCH via If-Match — plan §6.3.
+  version Int @default(1)
+
+  // Soft delete: tracks are referenced by graph nodes and set items, so a hard
+  // delete would orphan planning data the user still needs.
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Cursor pagination index. UUIDv7 is time-ordered (ADR-0003), so
+  // (createdAt, id) is a stable, total ordering usable as a cursor.
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([workspaceId, bpm])
+  @@map("tracks")
+}

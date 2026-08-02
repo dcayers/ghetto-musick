@@ -1,0 +1,58 @@
+name: flowgraph
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flowgraph
+      POSTGRES_PASSWORD: flowgraph
+      POSTGRES_DB: flowgraph
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowgraph -d flowgraph"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3-compatible object storage for waveform peaks, analysis results, and
+  # export bundles (plan §15.1). Not used by the current vertical slice.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: flowgraph
+      MINIO_ROOT_PASSWORD: flowgraph
+    ports:
+      - "59000:9000"
+      - "59001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

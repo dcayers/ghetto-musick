@@ -1,0 +1,28 @@
+{
+  "name": "@flowgraph/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.9.1",
+    "@prisma/client": "7.9.1",
+    "pg": "^8.22.0",
+    "@flowgraph/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.3",
+    "dotenv": "^17.4.2",
+    "prisma": "7.9.1"
+  }
+}

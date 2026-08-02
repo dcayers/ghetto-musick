@@ -1,41 +1,39 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
-# testing
-/coverage
+# build output
+dist/
+build/
+out/
+*.tsbuildinfo
 
-# next.js
-/.next/
-/out/
+# generated code (Prisma client, OpenAPI client)
+packages/db/src/generated/
+packages/api-client/src/generated/
 
-# production
-/build
+# test output
+coverage/
+test-results/
+playwright-report/
 
-# misc
+# env files — never commit real secrets
+.env
+.env.*
+!.env.example
+
+# tauri
+apps/desktop-bridge/src-tauri/target/
+
+# editor / os
 .DS_Store
 *.pem
+.idea/
+.vscode/*
+!.vscode/extensions.json
 
-# debug
+# logs
+*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+pnpm-debug.log*
