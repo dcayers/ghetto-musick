@@ -296,14 +296,24 @@ Budget roughly 30 lines plus a test asserting connect/disconnect ordering under 
 
 `@riktajs/core` is `0.12.0`, first published 2025-12-19, with 39 releases and ~40 weekly downloads. That is a young framework with real breaking-change velocity and a thin support surface. It is the chosen framework; these rules keep the choice cheap to reverse.
 
+**Verified behaviour** (established empirically against `0.12.0`, recorded in `docs/adr/0002-rikta.md`):
+
+- `@riktajs/core` hard-depends on `zod@4.3.5` and `fastify@5.3.2` as *direct*, not peer, dependencies — an install contains two copies of each. **Cross-instance Zod schemas still validate correctly** (Rikta duck-types via `.safeParse()`, not `instanceof`), so rule 4 below is safe.
+- **Default error responses include full stack traces** with absolute filesystem paths. Must be disabled outside development.
+- **Property-based `@Autowired()` requires `emitDecoratorMetadata`** and fails under esbuild/tsx. Explicit tokens work with any transpiler.
+- Request handling runs through Rikta's **bundled** Fastify, not any app-level Fastify.
+
 **Containment rules — enforced in CI:**
 
 1. **Exact-pin every `@riktajs/*` package.** No `^`, no `~`. A 0.x minor is a potential breaking change.
 2. **No Rikta import outside `apps/api/src/**/*.controller.ts` and `bootstrap.ts`.** Add an ESLint `no-restricted-imports` rule with those paths as the only allowlist. This is the single most important rule in the document.
 3. **Services accept plain interfaces**, never Rikta request/reply types. Controllers translate.
 4. **All Zod schemas live in `packages/contracts`**, not inline in Rikta decorators, so validation survives a framework swap.
-5. **Queue access goes through a port** (`JobQueue` interface) implemented by `@riktajs/queue`. BullMQ 6.0.5 is the fallback implementation.
-6. **Pin the Rikta version bump to its own PR** with the full integration suite green. Never bundle it with feature work.
+5. **Prefer explicit DI tokens** — `@Autowired(Token)` over bare `@Autowired()` — removing the `emitDecoratorMetadata` dependency.
+6. **Disable stack traces in non-development error responses**, configured in `bootstrap.ts`.
+7. **Do not pin Fastify at the app level** for the API; it has no effect. Depend on what Rikta bundles.
+8. **Queue access goes through a port** (`JobQueue` interface) implemented by `@riktajs/queue`. BullMQ 6.0.5 is the fallback implementation.
+9. **Pin the Rikta version bump to its own PR** with the full integration suite green. Never bundle it with feature work.
 
 **Exit path.** Because Rikta is Fastify-backed, the fallback is plain Fastify 5.11 plus a minimal DI container (or `awilix`). With rules 2–4 held, the migration touches controllers and `bootstrap.ts` only — a bounded, days-not-weeks change. Write this down as `docs/adr/0002-rikta.md` at Phase 0, including the trigger conditions: an unpatched security issue, a stalled release cadence beyond 90 days, or a breaking change that costs more than one sprint to absorb.
 
