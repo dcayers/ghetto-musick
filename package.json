@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -18,7 +18,8 @@
     "infra:reset": "docker compose -f infra/docker/docker-compose.yml down -v",
     "db:generate": "pnpm --filter @flowgraph/db generate",
     "db:migrate": "pnpm --filter @flowgraph/db migrate",
-    "dev:api": "pnpm --filter @flowgraph/api dev"
+    "dev:api": "pnpm --filter @flowgraph/api dev",
+    "db:status": "pnpm --filter @flowgraph/db exec prisma migrate status"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
