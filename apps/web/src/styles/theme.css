@@ -126,3 +126,29 @@ body {
 .react-flow__edge-textbg {
   fill: var(--color-surface);
 }
+
+/* React Flow ships its own component CSS at a specificity utility classes do
+   not beat, so its chrome is themed here rather than with `class!` overrides
+   that silently lose. */
+.react-flow__controls-button {
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-border);
+  fill: var(--color-ink-muted);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-surface-overlay);
+  fill: var(--color-ink);
+}
+
+.react-flow__controls,
+.react-flow__minimap {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.react-flow__minimap {
+  background: var(--color-surface);
+}
