@@ -574,7 +574,7 @@ function Canvas() {
 
   return (
     <div
-      className="bg-canvas relative h-full w-full min-w-0"
+      className="bg-canvas relative h-full min-h-px w-full min-w-px"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
