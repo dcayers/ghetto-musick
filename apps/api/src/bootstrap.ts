@@ -10,6 +10,7 @@ import {
 } from "@flowgraph/db";
 
 import { loadEnv, isProduction, type Env } from "./config/env.js";
+import { createGracefulShutdown } from "./lifecycle/graceful-shutdown.js";
 import { TRACK_SERVICE, HEALTH_SERVICE } from "./tokens.js";
 import { TrackRepository } from "./tracks/track.repository.js";
 import { TrackService } from "./tracks/track.service.js";
@@ -85,29 +86,16 @@ async function main(): Promise<void> {
   await app.listen();
   console.log(`API listening on http://${env.API_HOST}:${env.API_PORT}`);
 
-  /**
-   * Graceful shutdown ordering matters and is easy to get backwards.
-   *
-   * HTTP must drain first so in-flight requests can finish their queries;
-   * only then does the database disconnect. Reversing these produces
-   * intermittent "client is closed" errors under load that are miserable to
-   * diagnose. Asserted by test, not left to convention (ADR-0008).
-   */
-  let shuttingDown = false;
-  const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
-    console.log(`\n${signal} received, shutting down`);
-    try {
-      await app.close();
-      await database.disconnect();
-      process.exit(0);
-    } catch (error) {
-      console.error("Shutdown failed", error);
-      process.exit(1);
-    }
-  };
+  // Ordering (HTTP drain before database disconnect) lives in
+  // ./lifecycle/graceful-shutdown.ts so it can be asserted by a test rather
+  // than left to convention — ADR-0008.
+  const shutdown = createGracefulShutdown({
+    server: app,
+    database,
+    onExit: (code) => process.exit(code),
+    log: (message) => console.log(`\n${message}`),
+    logError: (message, error) => console.error(message, error),
+  });
 
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));

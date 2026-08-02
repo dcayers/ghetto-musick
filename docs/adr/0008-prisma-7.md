@@ -28,6 +28,8 @@ Prisma Client is framework-agnostic; the absence of `@riktajs/prisma` is an inco
 
 Budget roughly thirty lines plus a test asserting connect/disconnect ordering under graceful shutdown.
 
+**Implemented.** The ordering lives in `apps/api/src/lifecycle/graceful-shutdown.ts`, extracted from `bootstrap.ts` precisely so it can be tested, and is asserted by `graceful-shutdown.test.ts`. Writing that test surfaced a real defect in the original inline version: both calls sat in one `try` block, so a throwing `server.close()` skipped the database disconnect entirely and leaked the connection pool. The handler now attempts the disconnect regardless and reports a non-zero exit.
+
 **Do not adopt `@riktajs/typeorm` alongside it.** Running two ORMs to gain lifecycle sugar for one is a worse trade than hand-wiring.
 
 ### Phase 0 validation

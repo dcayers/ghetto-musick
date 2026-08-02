@@ -43,9 +43,10 @@ export function createPrismaClient(options: PrismaClientOptions): PrismaClient {
  * Wraps a client in the lifecycle contract the API bootstrap consumes.
  *
  * `disconnect` must run *after* HTTP draining so in-flight requests can
- * complete. Ordering is asserted by a test rather than left to convention —
- * getting it backwards produces intermittent shutdown errors that are
- * miserable to diagnose in production.
+ * complete. Getting it backwards produces intermittent shutdown errors that
+ * are miserable to diagnose in production, so the ordering is asserted by a
+ * test rather than left to convention — see
+ * `apps/api/src/lifecycle/graceful-shutdown.test.ts`.
  */
 export function createDatabaseLifecycle(client: PrismaClient): DatabaseLifecycle {
   return {
