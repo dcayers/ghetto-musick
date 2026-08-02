@@ -1,61 +1,27 @@
-import { useState, type ReactNode } from "react";
-import { Button, Slider, SliderTrack, SliderThumb, ToggleButton } from "react-aria-components";
+import { type ReactNode } from "react";
+import {
+  Button,
+  Slider,
+  SliderTrack,
+  SliderThumb,
+  ToggleButton,
+  Tooltip,
+  TooltipTrigger,
+} from "react-aria-components";
 import { ChevronDown, Star, Plus } from "lucide-react";
-import { cx } from "./primitives.js";
-import { waveformPeaks } from "../lib/mock.js";
+import { cx, energyColor, Waveform } from "./primitives.js";
+import { useWorkspace } from "../state/workspace.js";
+import { waveformPeaks } from "../lib/demo-data.js";
 
 /**
- * Shared UI vocabulary.
+ * Shared controls.
  *
- * Every panel draws from this so the surfaces stay consistent — the mockup's
- * cohesion comes from repetition, and the fastest way to lose it is each
- * panel inventing its own chip, section header, and slider.
+ * Every panel draws from this so the surfaces stay consistent — cohesion comes
+ * from repetition, and the fastest way to lose it is each panel inventing its
+ * own chip, section header, and slider.
  */
 
 /* -------------------------------------------------------------- Waveform -- */
-
-/**
- * Mini waveform for library rows, canvas nodes, and timeline cards.
- *
- * SVG rather than canvas: a library row is ~40 bars, and at that size the
- * DOM cost is lower than a canvas context per row. The large inspector
- * variant is a separate component for that reason.
- */
-export function MiniWaveform({
-  trackId,
-  bars = 40,
-  className,
-  color = "var(--color-energy)",
-}: {
-  trackId: string;
-  bars?: number;
-  className?: string;
-  color?: string;
-}) {
-  const peaks = waveformPeaks(trackId, bars);
-
-  return (
-    <svg
-      viewBox={`0 0 ${bars * 2} 20`}
-      preserveAspectRatio="none"
-      className={cx("h-4 w-full", className)}
-      aria-hidden="true"
-    >
-      {peaks.map((peak, index) => (
-        <rect
-          key={index}
-          x={index * 2}
-          y={10 - peak * 9}
-          width={1.2}
-          height={Math.max(1, peak * 18)}
-          rx={0.6}
-          fill={color}
-          opacity={0.45 + peak * 0.5}
-        />
-      ))}
-    </svg>
-  );
-}
 
 export interface WaveformCue {
   seconds: number;
@@ -66,31 +32,40 @@ export interface WaveformCue {
 /**
  * Large waveform with cue markers — the inspector's centrepiece.
  *
- * Cue positions are a fraction of duration, so the markers stay aligned at
- * any width without a layout pass.
+ * Cue positions are a fraction of duration, so markers stay aligned at any
+ * width without a layout pass. Clicking seeks; there is no transport yet, so
+ * the callback is optional and the cursor only changes when one is supplied.
  */
 export function DetailWaveform({
   trackId,
   durationSeconds,
+  energy = 3,
   cues = [],
+  positionSeconds,
   onSeek,
 }: {
   trackId: string;
   durationSeconds: number;
+  energy?: number;
   cues?: WaveformCue[];
+  positionSeconds?: number;
   onSeek?: (seconds: number) => void;
 }) {
-  const bars = 120;
+  const bars = 128;
   const peaks = waveformPeaks(trackId, bars);
+  const color = energyColor(energy);
 
   return (
     <div className="relative">
       <svg
         viewBox={`0 0 ${bars * 2} 64`}
         preserveAspectRatio="none"
-        className="bg-surface-raised h-20 w-full rounded-md"
+        className={cx(
+          "bg-surface-raised rounded-card h-[72px] w-full",
+          onSeek && "cursor-pointer",
+        )}
         role="img"
-        aria-label="Track waveform"
+        aria-label={`Waveform, ${cues.length} cue markers`}
         onClick={(event) => {
           if (!onSeek) return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -106,8 +81,8 @@ export function DetailWaveform({
             width={1.3}
             height={Math.max(2, peak * 60)}
             rx={0.6}
-            fill="var(--color-energy)"
-            opacity={0.35 + peak * 0.5}
+            fill={color}
+            opacity={0.32 + peak * 0.5}
           />
         ))}
       </svg>
@@ -115,12 +90,12 @@ export function DetailWaveform({
       {cues.map((cue) => (
         <div
           key={`${cue.label}-${cue.seconds}`}
-          className="pointer-events-none absolute top-0 h-20 w-px"
+          className="pointer-events-none absolute top-0 h-[72px] w-px"
           style={{
-            left: `${(cue.seconds / durationSeconds) * 100}%`,
+            left: `${(cue.seconds / Math.max(1, durationSeconds)) * 100}%`,
             background: cue.color,
           }}
-          title={`${cue.label}`}
+          title={cue.label}
         >
           <span
             className="absolute -top-px -left-[3px] size-[7px] rounded-sm"
@@ -128,62 +103,104 @@ export function DetailWaveform({
           />
         </div>
       ))}
+
+      {positionSeconds !== undefined && (
+        <div
+          aria-hidden="true"
+          className="bg-ink pointer-events-none absolute top-0 h-[72px] w-px"
+          style={{ left: `${(positionSeconds / Math.max(1, durationSeconds)) * 100}%` }}
+        />
+      )}
     </div>
   );
 }
 
+/** Re-exported so panels have one import site for waveforms. */
+export { Waveform };
+
 /* ------------------------------------------------------------- Sections -- */
 
+/**
+ * Collapsible inspector section.
+ *
+ * Open state lives in the store keyed by `id` so it survives selection changes
+ * — §9 requires expansion state to be preserved, and the inspector remounts
+ * per track.
+ */
 export function Section({
+  id,
   title,
   children,
-  defaultOpen = true,
   onAdd,
   addLabel,
+  aside,
 }: {
+  id: string;
   title: string;
   children: ReactNode;
-  defaultOpen?: boolean;
   onAdd?: () => void;
   addLabel?: string;
+  aside?: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const open = useWorkspace((state) => state.openSections[id] ?? true);
+  const toggleSection = useWorkspace((state) => state.toggleSection);
+  const contentId = `section-${id}`;
 
   return (
     <section className="border-border border-b last:border-b-0">
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
         <Button
-          onPress={() => setOpen(!open)}
+          onPress={() => toggleSection(id)}
           aria-expanded={open}
-          className="text-ink-muted hover:text-ink flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase"
+          aria-controls={contentId}
+          className="text-ink-muted hover:text-ink flex min-w-0 items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase"
         >
           <ChevronDown
             size={13}
-            className={cx("transition-transform", !open && "-rotate-90")}
+            aria-hidden="true"
+            className={cx("shrink-0 transition-transform", !open && "-rotate-90")}
           />
           {title}
         </Button>
-        {onAdd && (
-          <Button
-            onPress={onAdd}
-            aria-label={addLabel ?? `Add ${title}`}
-            className="text-ink-subtle hover:text-ink"
-          >
-            <Plus size={14} />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {aside}
+          {onAdd && (
+            <Button
+              onPress={onAdd}
+              aria-label={addLabel ?? `Add ${title}`}
+              className="text-ink-subtle hover:text-ink grid size-6 place-items-center rounded"
+            >
+              <Plus size={14} aria-hidden="true" />
+            </Button>
+          )}
+        </div>
       </div>
-      {open && <div className="px-3 pb-3">{children}</div>}
+      {open && (
+        <div id={contentId} className="px-3 pb-3">
+          {children}
+        </div>
+      )}
     </section>
   );
 }
 
 /** Label/value row used throughout the inspector's metadata block. */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  children,
+  aside,
+}: {
+  label: string;
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-[3px]">
       <dt className="text-ink-subtle shrink-0 text-[11px]">{label}</dt>
-      <dd className="text-ink truncate text-right text-[11px]">{children}</dd>
+      <dd className="text-ink flex min-w-0 items-baseline justify-end gap-1.5 text-right text-[11px]">
+        <span className="min-w-0 truncate">{children}</span>
+        {aside}
+      </dd>
     </div>
   );
 }
@@ -200,7 +217,11 @@ export function StarRating({
   onChange?: (value: number) => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-px" role="img" aria-label={`${value} of ${max} stars`}>
+    <span
+      className="inline-flex items-center gap-px"
+      role="img"
+      aria-label={`${value} of ${max} stars`}
+    >
       {Array.from({ length: max }, (_, index) => (
         <Button
           key={index}
@@ -211,7 +232,8 @@ export function StarRating({
         >
           <Star
             size={11}
-            className={index < value ? "fill-energy text-energy" : "text-border-strong"}
+            aria-hidden="true"
+            className={index < value ? "fill-warn text-warn" : "text-border-strong"}
           />
         </Button>
       ))}
@@ -223,29 +245,32 @@ export function LevelSlider({
   label,
   value,
   onChange,
+  isDisabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  isDisabled?: boolean;
 }) {
   return (
     <Slider
       value={value}
       onChange={onChange}
+      isDisabled={isDisabled}
       minValue={0}
       maxValue={1}
       step={0.01}
       aria-label={label}
       className="flex-1"
     >
-      <SliderTrack className="bg-border-strong relative h-1 w-full rounded-full">
+      <SliderTrack className="bg-border-strong relative h-1 w-full rounded-full data-[disabled]:opacity-40">
         {({ state }) => (
           <>
             <div
               className="bg-accent absolute h-1 rounded-full"
               style={{ width: `${state.getThumbPercent(0) * 100}%` }}
             />
-            <SliderThumb className="border-accent bg-ink top-1/2 size-2.5 rounded-full border" />
+            <SliderThumb className="border-accent bg-ink top-1/2 size-3 rounded-full border" />
           </>
         )}
       </SliderTrack>
@@ -256,32 +281,63 @@ export function LevelSlider({
 /** Small square toggle — the S/M buttons on each stem. */
 export function MiniToggle({
   label,
+  description,
   isSelected,
   onChange,
+  isDisabled = false,
   tone = "accent",
 }: {
   label: string;
+  description: string;
   isSelected: boolean;
   onChange: (value: boolean) => void;
+  isDisabled?: boolean;
   tone?: "accent" | "warn";
 }) {
   return (
-    <ToggleButton
-      isSelected={isSelected}
-      onChange={onChange}
-      aria-label={label}
-      className={cx(
-        "border-border text-ink-subtle size-5 rounded border text-[10px] font-medium",
-        isSelected && tone === "accent" && "border-accent bg-accent text-white",
-        isSelected && tone === "warn" && "border-warn bg-warn text-black",
-      )}
-    >
-      {label}
-    </ToggleButton>
+    <Hint label={description}>
+      <ToggleButton
+        isSelected={isSelected}
+        onChange={onChange}
+        isDisabled={isDisabled}
+        // The visible glyph is one letter, so the accessible name has to carry
+        // the meaning — "S" tells a screen-reader user nothing.
+        aria-label={description}
+        className={cx(
+          "border-border text-ink-subtle rounded-control grid size-5 shrink-0 place-items-center border text-[10px] font-medium disabled:opacity-40",
+          isSelected && tone === "accent" && "border-accent bg-accent text-white",
+          isSelected && tone === "warn" && "border-warn bg-warn text-black",
+        )}
+      >
+        {label}
+      </ToggleButton>
+    </Hint>
   );
 }
 
 /* --------------------------------------------------------------- Chrome -- */
+
+/**
+ * Hover/focus tooltip.
+ *
+ * React Aria's `Button` does not forward `title`, and §17 requires a tooltip
+ * that *accompanies* rather than replaces the accessible name — so the label is
+ * set with `aria-label` on the control and repeated visually here. RAC's
+ * tooltip also appears on keyboard focus, which `title` never does.
+ */
+export function Hint({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <TooltipTrigger delay={400} closeDelay={0}>
+      {children}
+      <Tooltip
+        offset={6}
+        className="border-border bg-surface-overlay text-ink rounded-control z-50 border px-2 py-1 text-[11px] shadow-lg"
+      >
+        {label}
+      </Tooltip>
+    </TooltipTrigger>
+  );
+}
 
 export function IconButton({
   icon: Icon,
@@ -291,6 +347,7 @@ export function IconButton({
   isDisabled,
   size = 15,
   iconClassName,
+  tone = "default",
 }: {
   icon: typeof Star;
   label: string;
@@ -300,65 +357,59 @@ export function IconButton({
   size?: number;
   /** For glyphs that carry state in their shape — a filled star, say. */
   iconClassName?: string;
+  tone?: "default" | "danger";
 }) {
   return (
-    <Button
-      {...(onPress ? { onPress } : {})}
-      {...(isDisabled !== undefined ? { isDisabled } : {})}
-      aria-label={label}
-      {...(isActive !== undefined ? { "aria-pressed": isActive } : {})}
-      className={cx(
-        // The active ring is not decoration. §9.6 forbids signalling state by
-        // hue alone, and `bg-accent-muted` on `bg-surface` is 1.27:1 — invisible
-        // in greyscale. The ring adds an outline that is present or absent
-        // rather than merely a different colour.
-        "grid size-7 place-items-center rounded-md transition-colors",
-        isActive
-          ? "bg-accent-muted text-accent ring-accent/70 ring-1"
-          : "text-ink-muted hover:bg-surface-raised hover:text-ink",
-        isDisabled && "opacity-40",
-      )}
-    >
-      <Icon size={size} className={iconClassName} />
-    </Button>
+    <Hint label={label}>
+      <Button
+        {...(onPress ? { onPress } : {})}
+        {...(isDisabled !== undefined ? { isDisabled } : {})}
+        aria-label={label}
+        {...(isActive !== undefined ? { "aria-pressed": isActive } : {})}
+        className={cx(
+          // The active ring is not decoration. §17 forbids signalling state by
+          // hue alone, and `bg-accent-muted` is ~1.3:1 against the panel — an
+          // outline that is present or absent survives greyscale.
+          "rounded-control grid size-7 shrink-0 place-items-center transition-colors disabled:opacity-40",
+          isActive
+            ? "bg-accent-muted text-accent ring-accent/70 ring-1"
+            : tone === "danger"
+              ? "text-ink-muted hover:bg-danger/15 hover:text-danger"
+              : "text-ink-muted hover:bg-surface-hover hover:text-ink",
+        )}
+      >
+        <Icon size={size} aria-hidden="true" className={iconClassName} />
+      </Button>
+    </Hint>
   );
 }
 
 export function Pill({
   children,
   tone = "neutral",
+  className,
+  title,
 }: {
   children: ReactNode;
-  tone?: "neutral" | "ok" | "warn" | "accent";
+  tone?: "neutral" | "ok" | "warn" | "danger" | "accent" | "info";
+  className?: string;
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cx(
-        "rounded-full border px-2 py-0.5 text-[10px] font-medium",
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium whitespace-nowrap",
         tone === "neutral" && "border-border text-ink-muted",
         tone === "ok" && "border-ok/40 text-ok",
         tone === "warn" && "border-warn/40 text-warn",
+        tone === "danger" && "border-danger/40 text-danger",
         tone === "accent" && "border-accent/50 text-accent",
+        tone === "info" && "border-info/40 text-info",
+        className,
       )}
     >
       {children}
-    </span>
-  );
-}
-
-/**
- * Marks UI backed by demo data.
- *
- * Building UI ahead of endpoints only works if it is obvious which numbers
- * are real — otherwise the design gets evaluated against fiction.
- */
-export function DemoBadge({ what }: { what: string }) {
-  return (
-    <span
-      className="border-warn/30 text-warn/70 rounded border px-1 py-px text-[9px] tracking-wide uppercase"
-      title={`${what} is demo data — no API behind it yet`}
-    >
-      demo
     </span>
   );
 }

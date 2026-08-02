@@ -27,6 +27,12 @@ export const transitionTechniques = [
   "loop-build",
   "acapella-over",
   "genre-flip",
+  // Effect-tail and hard-cut moves. Added because the planning UI renders
+  // them and the demo set uses both; a technique the client can draw but the
+  // API rejects is a vocabulary split, which is exactly what the closed set
+  // above exists to prevent.
+  "reverb-tail",
+  "backspin",
   "custom",
 ] as const;
 

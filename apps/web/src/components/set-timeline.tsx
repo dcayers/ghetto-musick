@@ -1,3 +1,4 @@
+import { useMemo, useState, type DragEvent } from "react";
 import {
   Button,
   ListBox,
@@ -6,59 +7,79 @@ import {
   Select,
   SelectValue,
 } from "react-aria-components";
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
-import { Artwork, Bpm, CamelotKey, EnergyDots, EmptyState, Panel, cx } from "./primitives.js";
-import { DemoBadge, IconButton, MiniWaveform } from "./ui.js";
-import { durationFor, energyFor, formatDuration } from "../lib/mock.js";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronsDownUp,
+  Maximize2,
+  Minimize2,
+  Plus,
+} from "lucide-react";
+import {
+  Artwork,
+  Bpm,
+  CamelotKey,
+  EmptyState,
+  EnergyDots,
+  Panel,
+  Truncate,
+  Waveform,
+  cx,
+} from "./primitives.js";
+import { IconButton, Pill } from "./ui.js";
+import {
+  TECHNIQUE_COLOR,
+  activeSetTransitionIds,
+  formatDuration,
+  setDuration,
+  techniqueSpec,
+  transitionBetween,
+  type DemoTrack,
+  type DemoTransition,
+} from "../lib/demo-data.js";
+import { PANEL_LIMITS, useWorkspace, type OverlayMetric } from "../state/workspace.js";
 
 /**
  * Set timeline — the ordered playback view under the canvas.
  *
  * The graph answers "what could follow what"; this answers "what actually
- * happens, in order". The energy curve is the reason the panel earns its
+ * happens, in order". The overlay curve is the reason the panel earns its
  * vertical space: a set reads as a shape over time, and the shape is only
  * visible when the metric is plotted against position rather than listed.
  */
 
-export type SetTimelineMetric = "energy" | "bpm" | "key";
-
-export interface SetTimelineTrack {
-  id: string;
-  title: string;
-  artist: string;
-  bpm: number | null;
-  keySignature: string | null;
-}
-
-export interface SetTimelineProps {
-  /** Tracks in set order; index 0 opens the set. */
-  tracks: SetTimelineTrack[];
-  selectedTrackId?: string | null | undefined;
-  onSelect: (trackId: string) => void;
-  metric: SetTimelineMetric;
-  onMetricChange: (metric: SetTimelineMetric) => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-}
-
 /**
- * Card geometry in pixels rather than Tailwind spacing.
+ * Lane geometry in pixels rather than Tailwind spacing.
  *
- * The curve's data points must sit dead centre under their card. Deriving the
- * x positions from the same two numbers the layout uses is the only way to
- * guarantee that; a `gap-3` class would silently drift if the root font size
- * were ever changed.
+ * Every control point on the curve has to sit dead centre under its card.
+ * Deriving both the flex row and the SVG x positions from these four numbers is
+ * the only way to guarantee that; a `gap-1.5` class would silently drift the
+ * moment the root font size changed.
  */
-const CARD_WIDTH = 152;
-const CARD_GAP = 12;
+const CARD_WIDTH = 150;
+const TRANSITION_WIDTH = 76;
+const LANE_GAP = 6;
+/** Card + its trailing transition block, i.e. the distance between two cards. */
+const SLOT_STEP = CARD_WIDTH + TRANSITION_WIDTH + LANE_GAP * 2;
 
-const CHART_HEIGHT = 76;
-/** Keeps the extreme points off the chart's edges so their circles aren't clipped. */
+const CHART_HEIGHT = 72;
+/** Keeps the extreme points off the chart edges so their circles aren't clipped. */
 const CHART_PAD = 10;
-/** Width of the High/Low axis gutter, which sits outside the horizontal scroller. */
-const AXIS_WIDTH = 36;
+/** The axis gutter, pinned outside the scroller so it stays legible while panning. */
+const AXIS_WIDTH = 38;
 
-const METRICS: ReadonlyArray<{ id: SetTimelineMetric; label: string }> = [
+function laneWidth(count: number): number {
+  if (count <= 0) return 0;
+  return count * CARD_WIDTH + (count - 1) * (TRANSITION_WIDTH + LANE_GAP * 2);
+}
+
+const cardCenterX = (index: number): number => index * SLOT_STEP + CARD_WIDTH / 2;
+
+/** Centre of the transition block that follows card `index`. */
+const boundaryX = (index: number): number =>
+  index * SLOT_STEP + CARD_WIDTH + LANE_GAP + TRANSITION_WIDTH / 2;
+
+const METRICS: ReadonlyArray<{ id: OverlayMetric; label: string }> = [
   { id: "energy", label: "Energy" },
   { id: "bpm", label: "BPM" },
   { id: "key", label: "Key" },
@@ -69,50 +90,49 @@ const METRICS: ReadonlyArray<{ id: SetTimelineMetric; label: string }> = [
  * reads as the same quantity the cards show. Colour is never the only signal —
  * the Select names the metric and every point carries a text label.
  */
-const METRIC_COLOR: Record<SetTimelineMetric, string> = {
+const METRIC_COLOR: Readonly<Record<OverlayMetric, string>> = {
   energy: "var(--color-energy)",
   bpm: "var(--color-bpm)",
   key: "var(--color-key)",
 };
 
+function isMetric(value: unknown): value is OverlayMetric {
+  return METRICS.some((entry) => entry.id === value);
+}
+
 /** "8A" → 8. The number is the wheel position; the letter is the mode. */
 function camelotNumber(key: string | null): number | null {
   if (!key) return null;
-  const match = /^(\d{1,2})/.exec(key.trim());
-  const digits = match?.[1];
+  const digits = /^(\d{1,2})/.exec(key.trim())?.[1];
   if (digits === undefined) return null;
   const position = Number(digits);
   return position >= 1 && position <= 12 ? position : null;
 }
 
-function isMetric(value: unknown): value is SetTimelineMetric {
-  return METRICS.some((entry) => entry.id === value);
-}
-
-function metricValue(track: SetTimelineTrack, metric: SetTimelineMetric): number | null {
+function metricValue(track: DemoTrack, metric: OverlayMetric): number | null {
   if (metric === "bpm") return track.bpm;
   if (metric === "key") return camelotNumber(track.keySignature);
-  return energyFor(track.id);
+  return track.energy;
 }
 
-function metricText(track: SetTimelineTrack, metric: SetTimelineMetric): string {
+function metricText(track: DemoTrack, metric: OverlayMetric): string {
   if (metric === "bpm") return track.bpm === null ? "BPM unknown" : `${track.bpm.toFixed(0)} BPM`;
   if (metric === "key") {
     return camelotNumber(track.keySignature) === null
       ? "Key unknown"
-      : `Camelot ${track.keySignature}`;
+      : `Camelot ${track.keySignature ?? ""}`.trim();
   }
-  return `Energy ${energyFor(track.id)} of 5`;
+  return `Energy ${track.energy} of 5`;
 }
 
 /**
- * Energy and Camelot have fixed ranges, so they get fixed domains — otherwise
- * a set of four flat tracks would draw a dramatic mountain range out of a
- * one-step difference. BPM has no natural bounds, so it is scaled to the set
- * with headroom, and a set that is all one tempo still draws a flat line
- * rather than dividing by zero.
+ * Energy and Camelot have fixed ranges, so they get fixed domains — otherwise a
+ * set of six flat tracks would draw a dramatic mountain range out of a one-step
+ * difference. BPM has no natural bounds, so it is scaled to the set with
+ * headroom, and a set that is all one tempo still draws a flat line rather than
+ * dividing by zero.
  */
-function domainFor(metric: SetTimelineMetric, values: number[]): { min: number; max: number } {
+function domainFor(metric: OverlayMetric, values: number[]): { min: number; max: number } {
   if (metric === "energy") return { min: 1, max: 5 };
   if (metric === "key") return { min: 1, max: 12 };
   if (values.length === 0) return { min: 0, max: 1 };
@@ -124,12 +144,12 @@ function domainFor(metric: SetTimelineMetric, values: number[]): { min: number; 
 /**
  * Axis endpoints.
  *
- * "High"/"Low" would be a lie for Camelot — position 12 is not higher than 1,
- * it is adjacent to it — and it makes the gutter cost 36px to say nothing.
- * Printing the actual domain endpoints means a value can be read off the curve.
+ * "High"/"Low" would be a lie for Camelot — 12A is adjacent to 1A, not above it
+ * — and it makes the gutter cost 38px to say nothing. Printing the actual
+ * domain endpoints means a value can be read off the curve.
  */
 function axisLabels(
-  metric: SetTimelineMetric,
+  metric: OverlayMetric,
   domain: { min: number; max: number },
 ): { top: string; bottom: string } {
   if (metric === "key") return { top: "12A", bottom: "1A" };
@@ -137,27 +157,72 @@ function axisLabels(
   return { top: `${Math.round(domain.max)}`, bottom: `${Math.round(domain.min)}` };
 }
 
-export function SetTimeline({
-  tracks,
-  selectedTrackId,
-  onSelect,
-  metric,
-  onMetricChange,
-  isExpanded,
-  onToggleExpand,
-}: SetTimelineProps) {
-  const totalSeconds = tracks.reduce((sum, track) => sum + durationFor(track.id), 0);
-  const metricLabel = METRICS.find((entry) => entry.id === metric)?.label ?? "Energy";
+/** A set entry that resolved to a real track, carrying its true set index. */
+interface Slot {
+  readonly index: number;
+  readonly track: DemoTrack;
+}
 
-  // Computed here rather than inside the chart so the axis gutter and the
-  // curve cannot disagree about what the vertical extent means.
-  const domain = domainFor(
-    metric,
-    tracks
-      .map((track) => metricValue(track, metric))
-      .filter((value): value is number => value !== null),
+export function SetTimeline() {
+  const set = useWorkspace((state) => state.set);
+  const tracks = useWorkspace((state) => state.tracks);
+  const transitions = useWorkspace((state) => state.transitions);
+  const overlayMetric = useWorkspace((state) => state.overlayMetric);
+  const setOverlayMetric = useWorkspace((state) => state.setOverlayMetric);
+  const selection = useWorkspace((state) => state.selection);
+  const selectTrack = useWorkspace((state) => state.selectTrack);
+  const selectTransition = useWorkspace((state) => state.selectTransition);
+  const reorderSet = useWorkspace((state) => state.reorderSet);
+  const togglePanel = useWorkspace((state) => state.togglePanel);
+  const setPanelSize = useWorkspace((state) => state.setPanelSize);
+  const panelHeight = useWorkspace((state) => state.panels.timeline.size);
+  const announce = useWorkspace((state) => state.announce);
+
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  /**
+   * Carrying the original index alongside the track keeps `reorderSet` honest
+   * when an id in the set has no matching track: the rendered position and the
+   * index the store splices on must be the same number.
+   */
+  const slots = useMemo<Slot[]>(() => {
+    const byId = new Map(tracks.map((track) => [track.id, track]));
+    return set.trackIds.flatMap((id, index) => {
+      const track = byId.get(id);
+      return track ? [{ index, track }] : [];
+    });
+  }, [set.trackIds, tracks]);
+
+  const selectedTrackId = selection?.kind === "track" ? selection.trackId : null;
+  const selectedTransitionId = selection?.kind === "transition" ? selection.transitionId : null;
+
+  const domain = useMemo(
+    () =>
+      domainFor(
+        overlayMetric,
+        slots
+          .map((slot) => metricValue(slot.track, overlayMetric))
+          .filter((value): value is number => value !== null),
+      ),
+    [slots, overlayMetric],
   );
-  const axis = axisLabels(metric, domain);
+  const axis = axisLabels(overlayMetric, domain);
+
+  // Adjacent pairs the graph has no edge for. A reordered set can put two
+  // tracks side by side that were never linked, and a planner needs to see it.
+  const gaps = Math.max(
+    0,
+    set.trackIds.length - 1 - activeSetTransitionIds(set, transitions).length,
+  );
+
+  const isMaximized = panelHeight >= PANEL_LIMITS.timeline.max;
+
+  function move(from: number, to: number, title: string): void {
+    if (from === to || to < 0 || to >= set.trackIds.length) return;
+    reorderSet(from, to);
+    announce(`${title} moved to position ${to + 1} of ${set.trackIds.length}.`);
+  }
 
   return (
     <Panel
@@ -165,38 +230,30 @@ export function SetTimeline({
       title={
         <span className="flex items-baseline gap-2 whitespace-nowrap">
           Set Timeline
-          {tracks.length > 0 && (
+          {slots.length > 0 && (
             <span className="text-ink-subtle text-xs font-normal tabular-nums">
-              {tracks.length} track{tracks.length === 1 ? "" : "s"} ·{" "}
-              {formatDuration(totalSeconds)}
+              {slots.length} track{slots.length === 1 ? "" : "s"} ·{" "}
+              {formatDuration(setDuration(set, tracks, transitions))}
             </span>
+          )}
+          {gaps > 0 && (
+            <Pill tone="warn" title="Adjacent tracks with no planned transition">
+              {gaps} gap{gaps === 1 ? "" : "s"}
+            </Pill>
           )}
         </span>
       }
       actions={
-        <div className="flex items-center gap-2">
-          {/* One badge, not two. Durations and waveforms are always demo data;
-              the energy series is demo only when it is the chosen metric, so
-              the wording widens rather than a second badge appearing. */}
-          {tracks.length > 0 && (
-            <DemoBadge
-              what={
-                metric === "energy"
-                  ? "Durations, waveforms, and the energy curve"
-                  : "Track durations and waveforms"
-              }
-            />
-          )}
-
+        <>
           <Select
-            aria-label="Curve metric"
-            selectedKey={metric}
+            aria-label="Overlay metric"
+            selectedKey={overlayMetric}
             onSelectionChange={(key) => {
-              if (isMetric(key)) onMetricChange(key);
+              if (isMetric(key)) setOverlayMetric(key);
             }}
-            isDisabled={tracks.length === 0}
+            isDisabled={slots.length === 0}
           >
-            <Button className="border-border bg-surface-raised text-ink hover:border-border-strong flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] outline-none disabled:opacity-50">
+            <Button className="border-border bg-surface-raised text-ink hover:border-border-strong rounded-control flex items-center gap-1.5 border px-2 py-1 text-[11px] outline-none disabled:opacity-50">
               <SelectValue />
               <ChevronDown size={12} aria-hidden="true" />
             </Button>
@@ -206,10 +263,9 @@ export function SetTimeline({
                   <ListBoxItem
                     key={entry.id}
                     id={entry.id}
-                    // `data-[selected]` rather than the `selected:` variant —
-                    // that variant needs the React Aria Tailwind plugin, which
-                    // this app does not install.
-                    className="text-ink-muted data-[selected]:text-accent hover:bg-surface-raised cursor-pointer rounded px-2 py-1 text-[11px] outline-none"
+                    // `data-[selected]` rather than a `selected:` variant — that
+                    // needs the React Aria Tailwind plugin, which is not installed.
+                    className="text-ink-muted data-[selected]:text-accent data-[focused]:bg-surface-raised cursor-pointer rounded px-2 py-1 text-[11px] outline-none"
                   >
                     {entry.label}
                   </ListBoxItem>
@@ -218,143 +274,386 @@ export function SetTimeline({
             </Popover>
           </Select>
 
-          {/* The panel's height belongs to the parent layout; this only reports
-              the intent, which is why it is a callback rather than local state. */}
           <IconButton
-            icon={isExpanded ? ChevronsDownUp : ChevronsUpDown}
-            label={isExpanded ? "Collapse set timeline" : "Expand set timeline"}
-            onPress={onToggleExpand}
-            isActive={isExpanded}
+            icon={isMaximized ? Minimize2 : Maximize2}
+            label={isMaximized ? "Restore timeline height" : "Maximize timeline"}
+            isActive={isMaximized}
+            onPress={() => {
+              const next = isMaximized
+                ? PANEL_LIMITS.timeline.initial
+                : PANEL_LIMITS.timeline.max;
+              setPanelSize("timeline", next);
+              announce(isMaximized ? "Set timeline restored." : "Set timeline maximized.");
+            }}
           />
-        </div>
+          {/* Only where collapsing does something. The compact (<md) layout
+              renders the timeline as a tab and ignores `panels.timeline.visible`,
+              so pressing this there is invisible yet still persists a collapsed
+              timeline into the next desktop session. `md` is the same query
+              `useLayoutMode` reads, so the two can never disagree. */}
+          <span className="hidden md:flex">
+            <IconButton
+              icon={ChevronsDownUp}
+              label="Collapse set timeline"
+              onPress={() => togglePanel("timeline")}
+            />
+          </span>
+        </>
       }
     >
-      {tracks.length === 0 ? (
+      {slots.length === 0 ? (
         <EmptyState
           title="No tracks in this set"
           hint="Drag tracks onto the canvas and order them to build the timeline."
         />
       ) : (
-        <div className="relative min-h-0 flex-1">
-          {/* Cards and curve share one scroller. Two synchronised scrollers
-              would let the curve drift out of alignment with its cards, which
-              is the one thing this panel cannot get wrong. */}
-          <div className="h-full overflow-x-auto overflow-y-hidden">
-            {/* `h-full` + `mt-auto` on the chart is what makes the pinned axis
-                gutter correct: both are anchored to the same bottom edge. With
-                the column merely top-aligned, a panel taller than its content
-                would float the chart away from the axis labelling it. */}
+        <div className="flex min-h-0 flex-1">
+          {/* The gutter stays outside the horizontal scroller so it survives a
+              pan, but it is a cell of the same flex row and its labels are the
+              last item of a column laid out exactly like the lane's — same
+              bottom padding, same CHART_HEIGHT band. Absolutely positioning it
+              against the panel's bottom edge instead made it agree with the
+              chart at exactly one panel height, because the chart was placed by
+              `mt-auto` inside a scroller that clips whenever the cards do not
+              fit. Sharing the layout removes the second box that could drift. */}
+          <div
+            className="text-ink-subtle pointer-events-none flex shrink-0 flex-col justify-end pr-1.5 pb-3 text-right font-mono text-[9px] tabular-nums"
+            style={{ width: AXIS_WIDTH }}
+          >
             <div
-              className="flex h-full w-max flex-col gap-2 py-3 pr-3"
-              style={{ paddingLeft: isExpanded ? AXIS_WIDTH : 12 }}
-            >
-              <div className="flex" style={{ gap: CARD_GAP }}>
-                {tracks.map((track, index) => (
-                  <TrackCard
-                    key={track.id}
-                    track={track}
-                    position={index + 1}
-                    isSelected={track.id === selectedTrackId}
-                    onPress={() => onSelect(track.id)}
-                  />
-                ))}
-              </div>
-
-              {/* Collapsing hides the curve, not the cards. The card row is
-                  the panel's job; the curve is the analysis on top of it, and
-                  it is what the vertical space is actually being spent on. */}
-              {isExpanded && (
-                <div className="mt-auto">
-                  <MetricCurve
-                    tracks={tracks}
-                    metric={metric}
-                    metricLabel={metricLabel}
-                    domain={domain}
-                    selectedTrackId={selectedTrackId ?? null}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Pinned to the chart band so the axis stays legible while the row
-              scrolls; the opaque background lets cards pass behind it. */}
-          {isExpanded && (
-            <div
-              className="bg-surface text-ink-subtle pointer-events-none absolute bottom-3 left-0 flex flex-col justify-between pr-1.5 text-right font-mono text-[9px] tabular-nums"
-              style={{ width: AXIS_WIDTH, height: CHART_HEIGHT }}
+              className="flex shrink-0 flex-col justify-between"
+              style={{ height: CHART_HEIGHT }}
             >
               <span>{axis.top}</span>
               <span>{axis.bottom}</span>
             </div>
-          )}
+          </div>
+
+          {/* Cards and curve share one scroller. Two synchronised scrollers
+              would let the curve drift out of alignment with its cards, which
+              is the one thing this panel cannot get wrong. */}
+          <div className="h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex h-full w-max flex-col gap-2 pt-3 pr-3 pl-1">
+              {/* The lane gets the leftover height and keeps its natural size
+                  inside it (`min-h-0` so the cards cannot push the band down).
+                  That is what fixes the band to CHART_HEIGHT above the bottom
+                  edge at every panel height, which is what the gutter mirrors. */}
+              <div className="min-h-0 flex-1">
+                <div className="flex items-stretch" style={{ gap: LANE_GAP }}>
+                  {slots.map((slot, position) => {
+                    const next = slots[position + 1];
+                    return (
+                      <TrackSlotWithLink
+                        key={slot.track.id}
+                        slot={slot}
+                        next={next}
+                        total={set.trackIds.length}
+                        isSelected={slot.track.id === selectedTrackId}
+                        isDropTarget={dragOver === slot.index && dragFrom !== slot.index}
+                        isDragging={dragFrom === slot.index}
+                        transition={
+                          next ? transitionBetween(transitions, slot.track.id, next.track.id) : null
+                        }
+                        selectedTransitionId={selectedTransitionId}
+                        onSelectTrack={selectTrack}
+                        onSelectTransition={selectTransition}
+                        onAnnounce={announce}
+                        onMove={move}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("text/plain", String(slot.index));
+                          event.dataTransfer.effectAllowed = "move";
+                          setDragFrom(slot.index);
+                        }}
+                        onDragOver={(event) => {
+                          // Only our own cards are droppable; a library row would
+                          // otherwise appear to be accepted and then do nothing.
+                          if (dragFrom === null) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                          setDragOver(slot.index);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const from = Number.parseInt(
+                            event.dataTransfer.getData("text/plain"),
+                            10,
+                          );
+                          setDragFrom(null);
+                          setDragOver(null);
+                          if (Number.isInteger(from)) move(from, slot.index, slot.track.title);
+                        }}
+                        onDragEnd={() => {
+                          setDragFrom(null);
+                          setDragOver(null);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Opaque: a lane taller than the space left over slides behind
+                  the band rather than through the curve. Flex items paint
+                  atomically in order, so this later sibling covers it. */}
+              <div className="bg-surface shrink-0 pb-3">
+                <MetricCurve
+                  slots={slots}
+                  metric={overlayMetric}
+                  domain={domain}
+                  selectedTrackId={selectedTrackId}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </Panel>
   );
 }
 
-function TrackCard({
-  track,
-  position,
+/**
+ * One card and the block that links it to the next track.
+ *
+ * They are rendered together because the transition only exists as a function
+ * of the pair — splitting them would require the lane to re-derive adjacency it
+ * already knows.
+ */
+function TrackSlotWithLink({
+  slot,
+  next,
+  total,
+  isSelected,
+  isDropTarget,
+  isDragging,
+  transition,
+  selectedTransitionId,
+  onSelectTrack,
+  onSelectTransition,
+  onAnnounce,
+  onMove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: {
+  slot: Slot;
+  next: Slot | undefined;
+  total: number;
+  isSelected: boolean;
+  isDropTarget: boolean;
+  isDragging: boolean;
+  transition: DemoTransition | null;
+  selectedTransitionId: string | null;
+  onSelectTrack: (trackId: string) => void;
+  onSelectTransition: (transitionId: string) => void;
+  onAnnounce: (message: string) => void;
+  onMove: (from: number, to: number, title: string) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+}) {
+  const { track, index } = slot;
+
+  return (
+    <>
+      {/* The drag wrapper is a plain element on purpose: React Aria's `Button`
+          deliberately does not forward drag-and-drop props, so the HTML5 source
+          has to sit outside it. */}
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+        className={cx(
+          "shrink-0 rounded-lg",
+          isDragging && "opacity-40",
+          // Not colour alone: the drop target grows a dashed outline offset
+          // clear of the card's own border.
+          isDropTarget && "outline-accent outline-2 outline-offset-2 outline-dashed",
+        )}
+        style={{ width: CARD_WIDTH }}
+      >
+        <Button
+          onPress={() => onSelectTrack(track.id)}
+          // `aria-current` rather than `aria-pressed`: the card is not a toggle,
+          // it is the one item of the set currently in focus elsewhere.
+          {...(isSelected ? { "aria-current": "true" as const } : {})}
+          onKeyDown={(event) => {
+            if (!event.altKey) return;
+            const delta = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+            if (delta === 0) return;
+            // Alt+Arrow is the pointer-free equivalent of the drag; the browser
+            // would otherwise scroll the lane out from under the card.
+            event.preventDefault();
+            onMove(index, index + delta, track.title);
+          }}
+          className={cx(
+            "bg-surface-raised flex h-full w-full flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors",
+            // Selection is not signalled by hue alone: the ring adds visible
+            // weight, which survives any colour vision deficiency.
+            isSelected
+              ? "border-accent ring-accent bg-surface-selected ring-1"
+              : "border-border hover:bg-surface-overlay hover:border-border-strong",
+          )}
+        >
+          <div className="flex items-start gap-2">
+            <div className="relative shrink-0">
+              <Artwork seed={track.id} size={36} />
+              <span
+                className={cx(
+                  "absolute -top-1.5 -right-1.5 grid size-[17px] place-items-center rounded-full border text-[9px] font-semibold tabular-nums",
+                  isSelected
+                    ? "border-accent bg-accent text-white"
+                    : "border-border bg-surface text-ink-muted",
+                )}
+              >
+                <span className="sr-only">Position </span>
+                {index + 1}
+                <span className="sr-only"> of {total}</span>
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <Truncate className="text-ink text-[11px] font-medium">{track.title}</Truncate>
+              <Truncate className="text-ink-muted text-[10px]">{track.artist}</Truncate>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Bpm value={track.bpm} />
+            <CamelotKey value={track.keySignature} />
+            <span className="ml-auto">
+              <EnergyDots value={track.energy} size={5} />
+            </span>
+          </div>
+
+          <Waveform trackId={track.id} bars={24} energy={track.energy} />
+
+          <span className="text-ink-subtle text-right font-mono text-[10px] tabular-nums">
+            {formatDuration(track.durationSeconds)}
+          </span>
+        </Button>
+      </div>
+
+      {next &&
+        (transition ? (
+          <TransitionBlock
+            transition={transition}
+            fromTitle={track.title}
+            toTitle={next.track.title}
+            isSelected={transition.id === selectedTransitionId}
+            onPress={() => onSelectTransition(transition.id)}
+          />
+        ) : (
+          <AddTransitionBlock
+            fromTitle={track.title}
+            toTitle={next.track.title}
+            onPress={() =>
+              // The live region is driven by a store value, and setting it to
+              // the string it already holds re-announces nothing. Naming the
+              // positions as well as the titles is what keeps two *different*
+              // gaps from producing the same message — a set may list the same
+              // track more than once, so the titles alone are not unique.
+              onAnnounce(
+                `No transition from ${track.title} to ${next.track.title}, positions ${index + 1} and ${next.index + 1}. Connect the two nodes on the canvas to plan one.`,
+              )
+            }
+          />
+        ))}
+    </>
+  );
+}
+
+/**
+ * The link between two adjacent tracks.
+ *
+ * Styled from the same `TECHNIQUE_COLOR`/dash pair the graph edge uses, so a
+ * filter sweep is recognisably the same object in both surfaces — and the dash
+ * is drawn as a real line, not implied, because §7 forbids colour as the only
+ * cue for technique.
+ */
+function TransitionBlock({
+  transition,
+  fromTitle,
+  toTitle,
   isSelected,
   onPress,
 }: {
-  track: SetTimelineTrack;
-  position: number;
+  transition: DemoTransition;
+  fromTitle: string;
+  toTitle: string;
   isSelected: boolean;
+  onPress: () => void;
+}) {
+  const spec = techniqueSpec(transition.technique);
+  const color = TECHNIQUE_COLOR[spec.family];
+  const warnings = transition.warnings.length;
+
+  return (
+    <Button
+      onPress={onPress}
+      {...(isSelected ? { "aria-current": "true" as const } : {})}
+      aria-label={
+        `${spec.label} from ${fromTitle} to ${toTitle}, ${transition.bars} bars` +
+        (warnings > 0 ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : "")
+      }
+      className={cx(
+        "flex shrink-0 flex-col items-center justify-center gap-1 self-center rounded-md border px-1.5 py-2 outline-none transition-colors",
+        isSelected
+          ? "border-accent ring-accent bg-surface-selected ring-1"
+          : "border-border bg-surface-raised hover:border-border-strong hover:bg-surface-overlay",
+      )}
+      style={{ width: TRANSITION_WIDTH }}
+    >
+      <span className="flex w-full items-center justify-center gap-1">
+        <Truncate className="text-center text-[10px] font-medium" title={spec.label}>
+          {spec.label}
+        </Truncate>
+        {warnings > 0 && <AlertTriangle size={11} aria-hidden="true" className="text-warn shrink-0" />}
+      </span>
+
+      {/* Rendered at real pixel width rather than through a stretched viewBox:
+          a `preserveAspectRatio="none"` scale would distort the dash pattern
+          into a different technique's. */}
+      <svg height={6} className="w-full" aria-hidden="true">
+        <line
+          x1={0}
+          y1={3}
+          x2="100%"
+          y2={3}
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          {...(spec.dash !== null ? { strokeDasharray: spec.dash } : {})}
+        />
+      </svg>
+
+      <span className="text-ink-subtle font-mono text-[10px] tabular-nums">
+        {transition.bars} bars
+      </span>
+    </Button>
+  );
+}
+
+function AddTransitionBlock({
+  fromTitle,
+  toTitle,
+  onPress,
+}: {
+  fromTitle: string;
+  toTitle: string;
   onPress: () => void;
 }) {
   return (
     <Button
       onPress={onPress}
-      // `aria-current` rather than `aria-pressed`: the card is not a toggle,
-      // it is the one item of a set that is currently in focus elsewhere.
-      {...(isSelected ? { "aria-current": "true" as const } : {})}
-      className={cx(
-        "bg-surface-raised flex shrink-0 flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors",
-        // Selection is not signalled by hue alone: the ring adds visible
-        // weight to the outline, which survives any colour vision deficiency.
-        isSelected
-          ? "border-accent ring-accent bg-surface-overlay ring-1"
-          : "border-border hover:bg-surface-overlay hover:border-border-strong",
-      )}
-      style={{ width: CARD_WIDTH }}
+      aria-label={`Add a transition from ${fromTitle} to ${toTitle}`}
+      className="border-border-strong text-ink-subtle hover:border-accent hover:text-accent flex shrink-0 flex-col items-center justify-center gap-1 self-center rounded-md border border-dashed px-1.5 py-2 outline-none transition-colors"
+      style={{ width: TRANSITION_WIDTH }}
     >
-      <div className="flex items-start gap-2">
-        <div className="relative shrink-0">
-          <Artwork seed={track.id} size={40} />
-          <span
-            className={cx(
-              "absolute -top-1.5 -right-1.5 grid size-[18px] place-items-center rounded-full border text-[9px] font-semibold tabular-nums",
-              isSelected
-                ? "border-accent bg-accent text-white"
-                : "border-border bg-surface text-ink-muted",
-            )}
-          >
-            <span className="sr-only">Position </span>
-            {position}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-ink truncate text-[11px] font-medium">{track.title}</p>
-          <p className="text-ink-muted truncate text-[10px]">{track.artist}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        <Bpm value={track.bpm} />
-        <CamelotKey value={track.keySignature} />
-        <span className="ml-auto">
-          <EnergyDots value={energyFor(track.id)} />
-        </span>
-      </div>
-
-      <MiniWaveform trackId={track.id} bars={28} />
-
-      <span className="text-ink-subtle text-right font-mono text-[10px] tabular-nums">
-        {formatDuration(durationFor(track.id))}
-      </span>
+      <Plus size={13} aria-hidden="true" />
+      <span className="text-[10px]">Add</span>
     </Button>
   );
 }
@@ -363,39 +662,36 @@ function TrackCard({
  * The set's shape over time.
  *
  * Hand-rolled SVG rather than a chart library: this is one polyline over at
- * most a few dozen points whose x positions are dictated by the card layout
- * above, and no charting library gives that alignment for less code than this.
+ * most a few dozen points whose x positions are dictated by the lane above, and
+ * no charting library gives that alignment for less code than this.
  */
 function MetricCurve({
-  tracks,
+  slots,
   metric,
-  metricLabel,
   domain,
   selectedTrackId,
 }: {
-  tracks: SetTimelineTrack[];
-  metric: SetTimelineMetric;
-  metricLabel: string;
+  slots: Slot[];
+  metric: OverlayMetric;
   domain: { min: number; max: number };
   selectedTrackId: string | null;
 }) {
-  const width = tracks.length * CARD_WIDTH + Math.max(0, tracks.length - 1) * CARD_GAP;
+  const width = laneWidth(slots.length);
   const color = METRIC_COLOR[metric];
-
-  const values = tracks.map((track) => metricValue(track, metric));
+  const metricLabel = METRICS.find((entry) => entry.id === metric)?.label ?? "Energy";
   const span = domain.max - domain.min || 1;
   const plotHeight = CHART_HEIGHT - CHART_PAD * 2;
 
-  const points = tracks.map((track, index) => {
-    const value = values[index] ?? null;
+  const points = slots.map((slot, position) => {
+    const value = metricValue(slot.track, metric);
     // An unknown value still needs a y or the polyline breaks into segments;
-    // the midline is the least misleading placement and the point is drawn
-    // hollow with a "unknown" title so it is never read as real data.
+    // the midline is the least misleading placement, and the point is drawn
+    // hollow with an "unknown" title so it is never read as real data.
     const ratio = value === null ? 0.5 : (value - domain.min) / span;
     return {
-      track,
+      track: slot.track,
       value,
-      x: index * (CARD_WIDTH + CARD_GAP) + CARD_WIDTH / 2,
+      x: cardCenterX(position),
       y: CHART_PAD + (1 - Math.max(0, Math.min(1, ratio))) * plotHeight,
     };
   });
@@ -416,9 +712,23 @@ function MetricCurve({
         height={CHART_HEIGHT}
         viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
         role="img"
-        aria-label={`${metricLabel} across ${tracks.length} tracks in set order`}
+        aria-label={`${metricLabel} across ${slots.length} tracks in set order`}
         className="block"
       >
+        {/* One guide per track boundary, sitting under the transition block it
+            belongs to — it is what ties a step in the curve to the mix causing it. */}
+        {points.slice(0, -1).map((point, position) => (
+          <line
+            key={`guide-${point.track.id}`}
+            x1={boundaryX(position)}
+            y1={0}
+            x2={boundaryX(position)}
+            y2={CHART_HEIGHT}
+            stroke="var(--color-border)"
+            strokeWidth={1}
+          />
+        ))}
+
         {hasCurve && (
           <>
             <polygon points={area} fill={color} opacity={0.12} />
@@ -432,6 +742,7 @@ function MetricCurve({
             />
           </>
         )}
+
         {points.map((point) => {
           const isSelected = point.track.id === selectedTrackId;
           return (
@@ -459,9 +770,9 @@ function MetricCurve({
       {/* The curve is a picture; this is the same data as text, so the panel is
           not shape-and-colour-only for anyone using a screen reader. */}
       <ol className="sr-only">
-        {points.map((point, index) => (
+        {points.map((point, position) => (
           <li key={point.track.id}>
-            {index + 1}. {point.track.title} — {metricText(point.track, metric)}
+            {position + 1}. {point.track.title} — {metricText(point.track, metric)}
           </li>
         ))}
       </ol>
