@@ -118,6 +118,49 @@ Ogg Vorbis is excluded explicitly, not merely unimplemented — its divergent, i
 
 The stop gate narrows to: parse the fixture corpus read-only, verify byte-for-byte that nothing changed, and confirm re-import is idempotent. Cue *write* verification moves out of S0 entirely, since we are not shipping it.
 
+---
+
+## S0 results (2026-08-02) — gate passed
+
+Run against a real Serato DJ Pro library (`~/Music/_Serato_`), not synthetic fixtures. Reproduce with `pnpm --filter @flowgraph/serato run scan`.
+
+**The gate:**
+
+| Criterion | Result |
+|---|---|
+| Byte-for-byte non-mutation | **PASS** — 45 files checksummed before and after; content, size, and mtime all identical. Independently re-verified against a SHA-256 baseline taken before any code touched the directory |
+| Re-import idempotent | **PASS** — parsing twice yields deep-equal results |
+| Format parses completely | **PASS** — 0 trailing bytes across the whole `database V2` |
+
+**Format confirmed exactly as documented.** The TLV envelope, the type-by-tag-prefix scheme, and the `vrsn`/`otrk`/`pfil`/`ttyp` tags all matched the Mixxx and Holzhaus write-ups on first read. No surprises, which is itself the useful result — the community documentation is trustworthy.
+
+### Finding that affects product direction: the library was mostly streaming
+
+**Five of six entries had `ttyp: "streaming"`, not a local file type.** Only one was an `mp3`.
+
+A streaming entry has **no `pfil` record at all** — there is no local file. That has consequences well beyond parsing:
+
+- **No audio to analyse.** The Rust DSP path (ADR-0006) has nothing to run against for those tracks.
+- **No GEOB tags to read.** Cue points and beatgrids live *inside* audio files; a streaming track has none.
+- **The MP3/AIFF container scope covers one track in six here.**
+
+Serato does still store `tbpm` and `tkey` for streaming entries, so the database remains a useful metadata source either way. But plan §4.3's precedence rule — "Serato/local files win for DJ metadata" — quietly assumes local files exist. On a streaming-heavy library there is nothing beneath the top of that hierarchy.
+
+This is one library and should not be over-generalised. It does mean the import path must treat `filePath` as genuinely optional rather than incidentally nullable, and that a "streaming track" is a first-class state, not a degenerate one.
+
+### Coverage gaps, stated plainly
+
+- **No crates were present** (`Subcrates/` empty), so crate parsing is exercised only by synthetic fixtures. Phase S2's crate export cannot be considered validated until it has run against a real crate.
+- **No GEOB / cue parsing was attempted.** Out of S1 scope, and there was only one local file to try it on.
+- **One library, one Serato version, macOS only.** The supported-version matrix (§12.3 S0) remains unbuilt.
+- Synthetic fixtures cannot validate format understanding against Serato itself — only real files can. The `scan` script is the validation, and it is run manually.
+
+### Implementation notes
+
+- Parser is **TypeScript**, not the Rust this ADR specifies. S0 is a feasibility spike, and the format knowledge, test corpus, and property tests all port unchanged. The production bridge parser stays Rust per the decision above; nothing here forecloses that.
+- **26 tags were seen but not mapped to fields** (`tlen`, `tbit`, `tsiz`, `tadd`, `ulbl`, and a family of `b*` booleans). All are preserved on the entry rather than dropped — the format is undocumented, and discarding a tag we have not learned to read yet would lose user data silently.
+- The read-only invariant is enforced **structurally, not behaviourally**: the parser modules import no filesystem API at all, and a test asserts that no module imports any mutating `fs` call. Verified by adding a `writeFileSync` import and confirming the suite fails.
+
 ## Consequences
 
 **Positive**

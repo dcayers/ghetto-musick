@@ -80,11 +80,28 @@ packages/
   contracts/        Zod schemas, DI-free ports, shared types
   db/               Prisma schema, client, migrations
   domain/           graph model, Camelot scoring, transition ranking
+  serato/           read-only Serato library and crate parsing
   api-client/       typed client generated from openapi.json
 infra/docker/       local Postgres, Redis, MinIO
 docs/               plan and ADRs
 openapi.json        API contract of record (generated, checked in)
 ```
+
+## Scanning a Serato library
+
+```bash
+pnpm --filter @flowgraph/serato run scan          # default macOS locations
+pnpm --filter @flowgraph/serato run scan <path>   # explicit _Serato_ root
+```
+
+**Safe to run against a real library — the package cannot write.** The parser
+modules import no filesystem API at all, and the one module that does
+(`read.ts`) imports read primitives only. A test asserts this, so an edit
+adding a write import fails the build.
+
+The scan checksums every file before and after parsing and reports byte-for-byte
+verification. Findings from the first real run are in
+[ADR-0010](docs/adr/0010-serato-format-scope.md).
 
 ## Checks
 

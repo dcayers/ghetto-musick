@@ -1030,7 +1030,16 @@ Durations assume a small product team of 3–5 engineers plus product/design, an
 
 **Deliverables** — ADRs for Rikta/REST (including the §6.6 exit path), IDs, auth, queue, desktop bridge, Serato safety boundary, and Prisma 7 validation · working Rikta + Prisma + PostgreSQL vertical slice · generated OpenAPI client consumed by a minimal TanStack Start page · Serato read/write feasibility report and fixture corpus · Spotify OAuth developer-mode PoC · threat model and analytics plan.
 
-**Exit criteria** — Team creates and queries a workspace-scoped track end to end · CI provisions a real Postgres and validates a migration · Serato read-only path is viable, cue writing either proven in fixtures or explicitly deferred · **Rikta import-boundary lint rule is active and passing.**
+**Exit criteria** — all met as of 2026-08-02:
+
+| Criterion | Status |
+|---|---|
+| Workspace-scoped track created and queried end to end | ✅ session-derived scope, ADR-0004 |
+| CI provisions a real Postgres and validates a migration | ✅ `.github/workflows/ci.yml` |
+| Serato read-only path viable; cue writing proven or deferred | ✅ gate passed against a real library; cue writing **deferred**, ADR-0010 |
+| Rikta import-boundary lint rule active and passing | ✅ enforced in CI and asserted by test |
+
+Remaining Phase 0 deliverables that are *not* exit criteria: staging deployment, threat model, Spotify OAuth proof of concept (deferred under the solo path, §25.9), and structured logging/tracing.
 
 ### 25.2 Phase 1 — Platform and library foundation (Weeks 4–7)
 
