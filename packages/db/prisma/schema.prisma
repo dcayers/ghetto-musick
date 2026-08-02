@@ -34,16 +34,84 @@ model Workspace {
   @@map("workspaces")
 }
 
-model User {
-  id          String   @id @db.Uuid
-  email       String   @unique
-  displayName String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// --- Identity: owned by better-auth (ADR-0004) -------------------------------
+//
+// The four models below (User, Session, Account, Verification) follow
+// better-auth's expected shape. Field names are its convention, not ours —
+// `name` rather than `displayName`, `emailVerified` as a required boolean.
+// Do not rename them to match house style; the adapter maps by name.
+//
+// IDs here are text, not @db.Uuid: better-auth generates its own identifiers
+// and they are not UUIDv7. ADR-0003 governs identifiers *we* mint.
 
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+
+  // Domain relation — not part of better-auth's schema.
   memberships WorkspaceMember[]
 
   @@map("users")
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Holds both password credentials and linked OAuth providers. Spotify tokens
+// land here via account linking rather than in a parallel mechanism (§7.1).
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
 }
 
 enum WorkspaceRole {
@@ -58,7 +126,9 @@ enum WorkspaceRole {
 model WorkspaceMember {
   id          String        @id @db.Uuid
   workspaceId String        @db.Uuid
-  userId      String        @db.Uuid
+  // Text, not uuid — this references better-auth's User.id, which it mints
+  // in its own format. Our own ids remain UUIDv7 (ADR-0003).
+  userId      String
   role        WorkspaceRole @default(OWNER)
   createdAt   DateTime      @default(now())
 

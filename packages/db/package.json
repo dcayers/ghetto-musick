@@ -11,8 +11,7 @@
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
-    "typecheck": "tsc --noEmit",
-    "seed": "tsx prisma/seed.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.9.1",

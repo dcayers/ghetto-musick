@@ -5,11 +5,16 @@ import {
   Body,
   Param,
   Query,
-  Headers,
+  Req,
   Autowired,
   HttpCode,
   NotFoundException,
-  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
+  // Rikta re-exports Fastify's types. Importing from "fastify" directly would
+  // require adding it as a dependency, which ADR-0002 rule 7 forbids — Rikta
+  // runs its own bundled copy, so an app-level pin has no effect anyway.
+  type FastifyRequest,
 } from "@riktajs/core";
 import {
   createTrackSchema,
@@ -19,14 +24,20 @@ import {
   type CreateTrackInput,
   type ListTracksQuery,
 } from "@flowgraph/contracts";
+import { TrackNotFoundError, type TrackService } from "./track.service.js";
+import {
+  UnauthenticatedError,
+  NoWorkspaceError,
+  type WorkspaceContext,
+  type WorkspaceContextService,
+} from "../auth/workspace-context.js";
+import { TRACK_SERVICE, WORKSPACE_CONTEXT } from "../tokens.js";
 
 // Pre-widened at module scope so the decorator positions below stay shallow —
 // see `validator` for why (TS2589 with Zod 4 + Rikta's generic overloads).
 const bodySchema = validator(createTrackSchema);
 const querySchema = validator(listTracksQuerySchema);
 const paramSchema = validator(trackIdParamSchema);
-import { TrackNotFoundError, type TrackService } from "./track.service.js";
-import { TRACK_SERVICE } from "../tokens.js";
 
 /**
  * Track HTTP surface — plan §8.2.
@@ -35,61 +46,62 @@ import { TRACK_SERVICE } from "../tokens.js";
  * Its entire job is translating HTTP into service calls and domain errors
  * into HTTP status codes.
  *
- * Uses an explicit DI token (`@Autowired(TrackService)`) rather than bare
- * `@Autowired()`, per ADR-0002 rule 5: property injection by type inference
- * requires `emitDecoratorMetadata` and breaks under esbuild/tsx.
+ * Workspace scope comes from the session (§8, §16.2) — never from a
+ * client-supplied value. The `x-workspace-id` header this replaced let any
+ * caller name any workspace.
  */
 @Controller("/v1/tracks")
 export class TrackController {
   @Autowired(TRACK_SERVICE)
   private readonly tracks!: TrackService;
 
+  @Autowired(WORKSPACE_CONTEXT)
+  private readonly workspaces!: WorkspaceContextService;
+
   @Post()
   @HttpCode(201)
-  async create(
-    @Body(bodySchema) body: CreateTrackInput,
-    @Headers("x-workspace-id") workspaceId: string | undefined,
-  ) {
-    return this.tracks.create(requireWorkspace(workspaceId), body);
+  async create(@Body(bodySchema) body: CreateTrackInput, @Req() request: FastifyRequest) {
+    const { workspaceId } = await this.requireWorkspace(request);
+    return this.tracks.create(workspaceId, body);
   }
 
   @Get()
-  async list(
-    @Query(querySchema) query: ListTracksQuery,
-    @Headers("x-workspace-id") workspaceId: string | undefined,
-  ) {
-    return this.tracks.list(requireWorkspace(workspaceId), query);
+  async list(@Query(querySchema) query: ListTracksQuery, @Req() request: FastifyRequest) {
+    const { workspaceId } = await this.requireWorkspace(request);
+    return this.tracks.list(workspaceId, query);
   }
 
   @Get("/:trackId")
   async getById(
     @Param(paramSchema) params: { trackId: string },
-    @Headers("x-workspace-id") workspaceId: string | undefined,
+    @Req() request: FastifyRequest,
   ) {
+    const { workspaceId } = await this.requireWorkspace(request);
+
     try {
-      return await this.tracks.getById(requireWorkspace(workspaceId), params.trackId);
+      return await this.tracks.getById(workspaceId, params.trackId);
     } catch (error) {
       if (error instanceof TrackNotFoundError) {
+        // Deliberately 404, not 403: a track in another workspace must be
+        // indistinguishable from one that does not exist, or the response
+        // code itself becomes a cross-workspace existence oracle.
         throw new NotFoundException(`Track ${params.trackId} not found`);
       }
       throw error;
     }
   }
-}
 
-/**
- * PLACEHOLDER — replaced by session-derived workspace context in Phase 1.
- *
- * Plan §8 requires every endpoint be workspace-scoped from the authenticated
- * context, with clients never choosing an owner ID. This header stub exists
- * only so the Phase 0 vertical slice can prove the data path end to end.
- *
- * ADR-0004 (better-auth) supplies the real implementation. Until then this
- * endpoint is not safe to expose.
- */
-function requireWorkspace(workspaceId: string | undefined): string {
-  if (!workspaceId) {
-    throw new BadRequestException("x-workspace-id header is required");
+  private async requireWorkspace(request: FastifyRequest): Promise<WorkspaceContext> {
+    try {
+      return await this.workspaces.resolve(request.headers);
+    } catch (error) {
+      if (error instanceof UnauthenticatedError) {
+        throw new UnauthorizedException("Authentication required");
+      }
+      if (error instanceof NoWorkspaceError) {
+        throw new ForbiddenException("No workspace available for this account");
+      }
+      throw error;
+    }
   }
-  return workspaceId;
 }

@@ -27,6 +27,39 @@ Use **better-auth** with `@better-auth/prisma-adapter`, self-hosted against the 
 
 Explicitly **not** using `@riktajs/passport`.
 
+## Implementation notes (2026-08-02)
+
+Three corrections from building it:
+
+1. **No separate adapter package is needed at install time.** `better-auth`
+   exposes `./adapters/prisma`, but that path re-exports
+   `@better-auth/prisma-adapter`, so the package must still be a direct
+   dependency. Import `prismaAdapter` from `@better-auth/prisma-adapter`.
+2. **Email + password ships first, not passkeys.** ADR-0004 called for
+   passwordless-first, and that remains the target. But passkeys need a
+   browser to enrol and magic links need an email transport; `apps/web`
+   does not exist and there is no mail provider, so neither could be
+   exercised — or verified — end to end. Email and password is the only flow
+   that can be tested today. Add the passkey plugin and demote passwords to a
+   fallback when the web app lands.
+3. **`User` conforms to better-auth's field names**, not house style —
+   `name` rather than `displayName`, `emailVerified` as a required boolean.
+   The adapter maps by name. Its ids are also *not* UUIDv7, so `User.id` and
+   `WorkspaceMember.userId` are plain text while our own ids stay UUIDv7 per
+   ADR-0003.
+
+**CSRF is on by default and is stricter than it first appears.** State-changing
+routes reject a request with a missing or untrusted `Origin` header
+(`403 MISSING_OR_NULL_ORIGIN`). This surfaced as an apparent "sign-out does not
+invalidate the session" bug during verification; the sign-out had simply been
+rejected. The behaviour is correct and satisfies plan §16.1 — but any non-browser
+client must send a trusted `Origin`.
+
+Workspace scoping is session-derived via `WorkspaceContextService`, and personal
+workspaces are provisioned from `databaseHooks.user.create.after`. Verified end
+to end: two concurrent sessions cannot see each other's tracks, a forged
+`x-workspace-id` header is ignored, and sign-out deletes the session row.
+
 ## Consequences
 
 **Positive**

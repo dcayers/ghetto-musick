@@ -10,9 +10,11 @@
     "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "1.6.25",
     "@flowgraph/contracts": "workspace:*",
     "@flowgraph/db": "workspace:*",
     "@riktajs/core": "0.12.0",
+    "better-auth": "1.6.25",
     "dotenv": "^17.4.2",
     "reflect-metadata": "0.2.2",
     "zod": "4.4.3"

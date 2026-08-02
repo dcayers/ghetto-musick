@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { config as loadDotenv } from "dotenv";
-import { Rikta, container } from "@riktajs/core";
+import { Rikta, container, type FastifyInstance } from "@riktajs/core";
 import {
   createPrismaClient,
   createDatabaseLifecycle,
@@ -11,7 +11,10 @@ import {
 
 import { loadEnv, isProduction, type Env } from "./config/env.js";
 import { createGracefulShutdown } from "./lifecycle/graceful-shutdown.js";
-import { TRACK_SERVICE, HEALTH_SERVICE } from "./tokens.js";
+import { createAuth, type Auth } from "./auth/auth.js";
+import { WorkspaceContextService } from "./auth/workspace-context.js";
+import { WorkspaceProvisioningService } from "./auth/workspace-provisioning.js";
+import { TRACK_SERVICE, HEALTH_SERVICE, WORKSPACE_CONTEXT } from "./tokens.js";
 import { TrackRepository } from "./tracks/track.repository.js";
 import { TrackService } from "./tracks/track.service.js";
 import { TrackController } from "./tracks/track.controller.js";
@@ -45,11 +48,56 @@ loadDotenv({
  * themselves: Rikta's `Token<T>` requires `new (...args: unknown[]) => T`, and
  * a constructor with typed parameters is not assignable to that. See tokens.ts.
  */
-function registerProviders(prisma: PrismaClient): void {
+function registerProviders(prisma: PrismaClient, auth: Auth): void {
   const trackRepository = new TrackRepository(prisma);
 
   container.registerValue(TRACK_SERVICE, new TrackService(trackRepository));
   container.registerValue(HEALTH_SERVICE, new HealthService(prisma));
+  container.registerValue(WORKSPACE_CONTEXT, new WorkspaceContextService(auth, prisma));
+}
+
+/**
+ * Mounts better-auth's routes on the underlying Fastify instance.
+ *
+ * better-auth speaks the web `Request`/`Response` interface, so the Fastify
+ * request is translated across the boundary. Fastify has already parsed the
+ * JSON body by this point, hence the re-serialization — that avoids
+ * overriding the global content-type parser, which would affect every other
+ * route in the application.
+ */
+function mountAuthRoutes(server: FastifyInstance, auth: Auth): void {
+  server.all("/api/auth/*", async (request, reply) => {
+    const url = new URL(request.url, `http://${request.headers.host ?? "localhost"}`);
+
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(request.headers)) {
+      if (Array.isArray(value)) {
+        for (const item of value) headers.append(key, item);
+      } else if (value !== undefined) {
+        headers.append(key, value);
+      }
+    }
+
+    const hasBody = request.method !== "GET" && request.method !== "HEAD";
+    const response = await auth.handler(
+      new Request(url.toString(), {
+        method: request.method,
+        headers,
+        ...(hasBody && request.body !== undefined
+          ? { body: JSON.stringify(request.body) }
+          : {}),
+      }),
+    );
+
+    reply.status(response.status);
+    // Must use append, not header: better-auth emits multiple Set-Cookie
+    // headers, and replacing would drop all but the last.
+    response.headers.forEach((value, key) => {
+      reply.raw.appendHeader(key, value);
+    });
+
+    return reply.send(response.body ? await response.text() : null);
+  });
 }
 
 async function main(): Promise<void> {
@@ -63,7 +111,19 @@ async function main(): Promise<void> {
 
   await database.connect();
 
-  registerProviders(prisma);
+  const provisioning = new WorkspaceProvisioningService(prisma);
+  const auth = createAuth({
+    prisma,
+    secret: env.AUTH_SECRET,
+    baseUrl: env.AUTH_BASE_URL,
+    trustedOrigins: env.AUTH_TRUSTED_ORIGINS,
+    isProduction: isProduction(env),
+    onUserCreated: async (user) => {
+      await provisioning.provisionPersonalWorkspace(user);
+    },
+  });
+
+  registerProviders(prisma, auth);
 
   const app = await Rikta.create({
     port: env.API_PORT,
@@ -82,6 +142,8 @@ async function main(): Promise<void> {
       logErrors: true,
     },
   });
+
+  mountAuthRoutes(app.server, auth);
 
   await app.listen();
   console.log(`API listening on http://${env.API_HOST}:${env.API_PORT}`);

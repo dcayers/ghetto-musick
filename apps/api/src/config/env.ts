@@ -11,6 +11,20 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   API_HOST: z.string().default("127.0.0.1"),
+  // Signs session cookies. A weak value here undermines every session in the
+  // system, so it is required and length-checked rather than defaulted.
+  AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
+  AUTH_BASE_URL: z.string().default("http://127.0.0.1:4000"),
+  // Comma-separated origins permitted to carry credentials (the web app).
+  AUTH_TRUSTED_ORIGINS: z
+    .string()
+    .default("http://localhost:3000")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0),
+    ),
   LOG_QUERIES: z
     .string()
     .optional()

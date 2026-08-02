@@ -17,11 +17,11 @@ edges, and a set is a versioned path through that graph.
 ```bash
 pnpm install
 cp .env.example .env
-pnpm infra:up          # postgres, redis, minio
-pnpm db:generate       # prisma client
-pnpm db:migrate        # apply migrations
-pnpm --filter @flowgraph/db run seed
-pnpm dev:api           # http://127.0.0.1:4000
+openssl rand -hex 32    # paste into AUTH_SECRET in .env
+pnpm infra:up           # postgres, redis, minio
+pnpm db:generate        # prisma client
+pnpm db:migrate         # apply migrations
+pnpm dev:api            # http://127.0.0.1:4000
 ```
 
 Verify:
@@ -30,12 +30,27 @@ Verify:
 curl -s http://127.0.0.1:4000/health/ready
 ```
 
-The seed prints a workspace id. Until session-derived context lands
-(ADR-0004), requests carry it explicitly:
+## Signing in
+
+There is no seed script — signing up *is* the setup. Creating an account
+provisions a personal workspace automatically, and every request is scoped to
+it from the session cookie.
 
 ```bash
-curl -s http://127.0.0.1:4000/v1/tracks -H "x-workspace-id: <workspace-id>"
+curl -s -c cookies.txt -X POST http://127.0.0.1:4000/api/auth/sign-up/email \
+  -H "content-type: application/json" -H "Origin: http://localhost:3000" \
+  -d '{"email":"you@example.com","password":"a-long-passphrase","name":"You"}'
 ```
+
+Then use the cookie jar:
+
+```bash
+curl -s -b cookies.txt http://127.0.0.1:4000/v1/tracks
+```
+
+**State-changing auth routes require an `Origin` header** from
+`AUTH_TRUSTED_ORIGINS` — that is CSRF protection, not a bug. Without it,
+sign-out returns 403 while sign-up and sign-in still work.
 
 ## Layout
 
