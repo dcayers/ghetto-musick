@@ -26,8 +26,19 @@ const REPO_ROOT = join(HERE, "..", "..", "..");
 
 const SCAN_ROOTS = [join(REPO_ROOT, "apps"), join(REPO_ROOT, "packages")];
 
-/** Only these may import the framework. */
-const ALLOWED = [/\.controller\.ts$/, /(^|[\\/])bootstrap\.ts$/];
+/**
+ * The HTTP binding layer — the only files permitted to import the framework.
+ * Kept in sync with `HTTP_BINDING_LAYER` in eslint.config.mjs.
+ *
+ * `openapi.ts` earns its place on the same test as the others: it exists only
+ * to describe HTTP surface, holds no domain logic, and would be deleted rather
+ * than ported if the framework changed.
+ */
+const ALLOWED = [
+  /\.controller\.ts$/,
+  /(^|[\\/])bootstrap\.ts$/,
+  /(^|[\\/])openapi\.ts$/,
+];
 
 /**
  * This file is excluded from the static scan: it necessarily contains the
@@ -127,5 +138,19 @@ describe("ADR-0002 lint rule", () => {
     const messages = await lint(join(REPO_ROOT, "apps/api/src/bootstrap.ts"));
 
     expect(messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(false);
+  });
+
+  it("allows the same import from the OpenAPI descriptor", async () => {
+    const messages = await lint(join(REPO_ROOT, "apps/api/src/openapi.ts"));
+
+    expect(messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(false);
+  });
+
+  it("still rejects a near-miss filename", async () => {
+    // The allowlist must match whole filenames, not substrings — an
+    // `openapi-helpers.ts` full of domain logic must not slip through.
+    const messages = await lint(join(REPO_ROOT, "apps/api/src/openapi-helpers.ts"));
+
+    expect(messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(true);
   });
 });

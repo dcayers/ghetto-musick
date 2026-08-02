@@ -273,7 +273,7 @@ Each feature owns its controller, service, repository functions, Zod schemas, au
 - Cursor pagination for tracks, jobs, imports, audit events.
 - `ETag`/`If-Match` or integer `version` for graph layout and set mutations.
 - `Idempotency-Key` for imports, exports, AI generation, batch mutations.
-- RFC 9457 problem details for errors.
+- ~~RFC 9457 problem details for errors.~~ **Not implemented.** Rikta's exception filter emits `{statusCode, message, error, timestamp, path, requestId, details}` instead. `errorResponseSchema` in `packages/contracts` documents the actual shape, because an OpenAPI document that describes a format the API does not emit is worse than one that describes the real one. Converting needs a custom exception filter and touches every error path — its own change.
 - `202 Accepted` with a job resource for long-running work.
 - Batch endpoints bounded and either transactional or reporting per-item results explicitly.
 

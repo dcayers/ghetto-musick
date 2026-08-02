@@ -19,7 +19,9 @@
     "db:generate": "pnpm --filter @flowgraph/db generate",
     "db:migrate": "pnpm --filter @flowgraph/db migrate",
     "dev:api": "pnpm --filter @flowgraph/api dev",
-    "db:status": "pnpm --filter @flowgraph/db exec prisma migrate status"
+    "db:status": "pnpm --filter @flowgraph/db exec prisma migrate status",
+    "openapi": "pnpm --filter @flowgraph/api run openapi:generate",
+    "api-client:generate": "pnpm --filter @flowgraph/api-client run generate"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

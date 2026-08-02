@@ -52,6 +52,25 @@ curl -s -b cookies.txt http://127.0.0.1:4000/v1/tracks
 `AUTH_TRUSTED_ORIGINS` — that is CSRF protection, not a bug. Without it,
 sign-out returns 403 while sign-up and sign-in still work.
 
+## API contract
+
+`openapi.json` at the repo root is the contract of record — generated from the
+controllers, checked in, and verified by CI. Browsable UI at
+[/docs](http://127.0.0.1:4000/docs) while the API runs.
+
+```bash
+pnpm openapi              # regenerate openapi.json
+pnpm api-client:generate  # regenerate the typed client from it
+```
+
+**Change an endpoint, regenerate, commit both.** CI fails if `openapi.json` is
+stale, so a contract change always shows up in the same commit as the code
+change. The generated client (`packages/api-client/src/generated/`) is *not*
+checked in — it is derived from `openapi.json`, so committing it would add a
+large mechanical diff with no review signal.
+
+Generating needs no server and no database; it reads controller metadata only.
+
 ## Layout
 
 ```text
@@ -60,8 +79,11 @@ apps/
 packages/
   contracts/        Zod schemas, DI-free ports, shared types
   db/               Prisma schema, client, migrations
+  domain/           graph model, Camelot scoring, transition ranking
+  api-client/       typed client generated from openapi.json
 infra/docker/       local Postgres, Redis, MinIO
 docs/               plan and ADRs
+openapi.json        API contract of record (generated, checked in)
 ```
 
 ## Checks

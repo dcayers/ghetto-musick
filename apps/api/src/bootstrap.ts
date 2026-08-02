@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { Rikta, container, type FastifyInstance } from "@riktajs/core";
+import { registerSwagger } from "@riktajs/swagger";
 import {
   createPrismaClient,
   createDatabaseLifecycle,
@@ -17,9 +18,8 @@ import { WorkspaceProvisioningService } from "./auth/workspace-provisioning.js";
 import { TRACK_SERVICE, HEALTH_SERVICE, WORKSPACE_CONTEXT } from "./tokens.js";
 import { TrackRepository } from "./tracks/track.repository.js";
 import { TrackService } from "./tracks/track.service.js";
-import { TrackController } from "./tracks/track.controller.js";
 import { HealthService } from "./health/health.service.js";
-import { HealthController } from "./health/health.controller.js";
+import { API_CONTROLLERS, OPENAPI_CONFIG } from "./openapi.js";
 
 // Resolve .env against the repo root, not the process working directory —
 // otherwise `pnpm --filter` runs from apps/api and silently finds nothing.
@@ -132,7 +132,9 @@ async function main(): Promise<void> {
     // Explicit registration over filesystem discovery: discovery order is
     // implicit and its failures are hard to debug.
     autowired: false,
-    controllers: [TrackController, HealthController],
+    // Shared with the OpenAPI generator so a route cannot be served but
+    // undocumented, or documented but unrouted.
+    controllers: [...API_CONTROLLERS],
     exceptionFilter: {
       // ADR-0002, verified finding 2: Rikta's default error response embeds a
       // full stack trace including absolute filesystem paths. That is an
@@ -144,6 +146,22 @@ async function main(): Promise<void> {
   });
 
   mountAuthRoutes(app.server, auth);
+
+  // Same controllers and same config as `pnpm openapi`, so the served spec
+  // matches the checked-in artifact. That equality is asserted by a test
+  // (openapi.test.ts) rather than assumed — the two documents are built by
+  // separate code paths and would otherwise drift unnoticed.
+  //
+  // UI is development-only; the JSON stays available everywhere so the
+  // generated client can be rebuilt against a deployed environment.
+  await registerSwagger(app.server, {
+    config: OPENAPI_CONFIG,
+    controllers: [...API_CONTROLLERS],
+    jsonPath: "/openapi.json",
+    uiPath: "/docs",
+    exposeUI: !isProduction(env),
+    exposeSpec: true,
+  });
 
   await app.listen();
   console.log(`API listening on http://${env.API_HOST}:${env.API_PORT}`);

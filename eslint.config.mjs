@@ -14,9 +14,24 @@ import tseslint from "typescript-eslint";
  * exceptions; move the code instead.
  */
 const RIKTA_CONTAINMENT_MESSAGE =
-  "ADR-0002 rule 2: @riktajs/* and fastify may only be imported from " +
-  "apps/api/src/**/*.controller.ts or apps/api/src/bootstrap.ts. " +
-  "Services accept plain interfaces; controllers translate at the boundary.";
+  "ADR-0002 rule 2: @riktajs/* and fastify may only be imported from the HTTP " +
+  "binding layer — apps/api/src/**/*.controller.ts, apps/api/src/bootstrap.ts, " +
+  "or apps/api/src/openapi.ts. Services accept plain interfaces; controllers " +
+  "translate at the boundary.";
+
+/**
+ * The HTTP binding layer — the only files permitted to touch the framework.
+ *
+ * Each exists solely to bind HTTP to the application and holds no domain
+ * logic, so each would be rewritten (or, for openapi.ts, deleted) rather than
+ * ported if the framework were replaced. That is the test for admitting a
+ * file here. Do not add anything that would need to *survive* a swap.
+ */
+const HTTP_BINDING_LAYER = [
+  "apps/api/src/**/*.controller.ts",
+  "apps/api/src/bootstrap.ts",
+  "apps/api/src/openapi.ts",
+];
 
 const restrictedFrameworkImports = {
   "no-restricted-imports": [
@@ -60,10 +75,10 @@ export default tseslint.config(
     },
   },
 
-  // Framework containment: everything under apps/api EXCEPT controllers and bootstrap.
+  // Framework containment: everything under apps/api EXCEPT the binding layer.
   {
     files: ["apps/api/src/**/*.ts"],
-    ignores: ["apps/api/src/**/*.controller.ts", "apps/api/src/bootstrap.ts"],
+    ignores: HTTP_BINDING_LAYER,
     rules: restrictedFrameworkImports,
   },
 

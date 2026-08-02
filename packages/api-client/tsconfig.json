@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Browser-facing: this client runs in apps/web, so it needs the DOM lib
+    // for fetch, Request, and RequestCredentials. The base config is
+    // ES2023-only because everything else in the workspace is server-side.
+    "lib": ["ES2023", "DOM"],
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

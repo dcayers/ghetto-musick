@@ -67,7 +67,14 @@ export const trackSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const trackPageSchema = z.object({
+  items: z.array(trackSchema),
+  /** Opaque cursor for the next page, or null when exhausted. */
+  nextCursor: z.string().nullable(),
+});
+
 export type CreateTrackInput = z.infer<typeof createTrackSchema>;
+export type TrackPage = z.infer<typeof trackPageSchema>;
 export type UpdateTrackInput = z.infer<typeof updateTrackSchema>;
 export type ListTracksQuery = z.infer<typeof listTracksQuerySchema>;
 export type TrackDto = z.infer<typeof trackSchema>;

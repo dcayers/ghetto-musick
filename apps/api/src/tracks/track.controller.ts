@@ -17,9 +17,26 @@ import {
   type FastifyRequest,
 } from "@riktajs/core";
 import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiSecurity,
+  ApiBody,
+  ApiQuery,
+  ApiParam,
+} from "@riktajs/swagger";
+import {
   createTrackSchema,
   listTracksQuerySchema,
   trackIdParamSchema,
+  trackSchema,
+  trackPageSchema,
+  errorResponseSchema,
   validator,
   type CreateTrackInput,
   type ListTracksQuery,
@@ -51,6 +68,8 @@ const paramSchema = validator(trackIdParamSchema);
  * caller name any workspace.
  */
 @Controller("/v1/tracks")
+@ApiTags("Tracks")
+@ApiSecurity("sessionCookie")
 export class TrackController {
   @Autowired(TRACK_SERVICE)
   private readonly tracks!: TrackService;
@@ -60,18 +79,88 @@ export class TrackController {
 
   @Post()
   @HttpCode(201)
+  @ApiOperation({
+    summary: "Create a track",
+    description:
+      "Creates a track in the caller's workspace. The workspace is derived " +
+      "from the session; it cannot be supplied by the client.",
+  })
+  @ApiBody({ description: "Track to create.", schema: createTrackSchema })
+  @ApiCreatedResponse({ description: "Track created.", schema: trackSchema })
+  @ApiBadRequestResponse({
+    description: "Request body failed validation.",
+    schema: errorResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "No valid session cookie.",
+    schema: errorResponseSchema,
+  })
+  @ApiForbiddenResponse({
+    description: "Authenticated, but the account has no workspace.",
+    schema: errorResponseSchema,
+  })
   async create(@Body(bodySchema) body: CreateTrackInput, @Req() request: FastifyRequest) {
     const { workspaceId } = await this.requireWorkspace(request);
     return this.tracks.create(workspaceId, body);
   }
 
   @Get()
+  @ApiOperation({
+    summary: "List tracks",
+    description:
+      "Cursor-paginated over (createdAt DESC, id DESC). Pass the previous " +
+      "response's `nextCursor` to fetch the following page; a null cursor " +
+      "means the last page.",
+  })
+  @ApiQuery({ name: "query", required: false, description: "Case-insensitive match on title or artist." })
+  @ApiQuery({ name: "bpmMin", required: false, description: "Lower bound on BPM (inclusive)." })
+  @ApiQuery({ name: "bpmMax", required: false, description: "Upper bound on BPM (inclusive)." })
+  @ApiQuery({ name: "cursor", required: false, description: "Opaque cursor from a previous response." })
+  @ApiQuery({ name: "limit", required: false, description: "Page size, 1-100. Defaults to 50." })
+  @ApiOkResponse({ description: "A page of tracks.", schema: trackPageSchema })
+  @ApiBadRequestResponse({
+    description: "Query parameters failed validation.",
+    schema: errorResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "No valid session cookie.",
+    schema: errorResponseSchema,
+  })
+  @ApiForbiddenResponse({
+    description: "Authenticated, but the account has no workspace.",
+    schema: errorResponseSchema,
+  })
   async list(@Query(querySchema) query: ListTracksQuery, @Req() request: FastifyRequest) {
     const { workspaceId } = await this.requireWorkspace(request);
     return this.tracks.list(workspaceId, query);
   }
 
   @Get("/:trackId")
+  @ApiOperation({
+    summary: "Get a track by id",
+    description:
+      "Returns 404 rather than 403 for a track in another workspace — a " +
+      "distinct status would confirm the row exists and turn the response " +
+      "code into a cross-workspace existence oracle.",
+  })
+  @ApiParam({ name: "trackId", description: "Track UUID." })
+  @ApiOkResponse({ description: "The track.", schema: trackSchema })
+  @ApiNotFoundResponse({
+    description: "No such track in the caller's workspace.",
+    schema: errorResponseSchema,
+  })
+  @ApiBadRequestResponse({
+    description: "Malformed track id.",
+    schema: errorResponseSchema,
+  })
+  @ApiUnauthorizedResponse({
+    description: "No valid session cookie.",
+    schema: errorResponseSchema,
+  })
+  @ApiForbiddenResponse({
+    description: "Authenticated, but the account has no workspace.",
+    schema: errorResponseSchema,
+  })
   async getById(
     @Param(paramSchema) params: { trackId: string },
     @Req() request: FastifyRequest,
