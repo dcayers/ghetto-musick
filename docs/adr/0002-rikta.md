@@ -49,7 +49,7 @@ The following was established empirically against `@riktajs/core@0.12.0` before 
 Re-open this decision when **any** of the following is observed:
 
 - An unpatched security advisory against `@riktajs/*` older than 14 days.
-- No upstream release for 90 consecutive days while open issues affecting us remain.
+- No upstream release for 90 consecutive days while open issues affecting us remain. **Clock started 2026-07-03**, the most recent publish; `0.12.0` is still the latest release as of 2026-08-02, so roughly one month has elapsed. Re-check this date at each milestone.
 - A breaking change whose absorption is estimated at more than one sprint.
 - A required capability that cannot be implemented without violating containment rule 2.
 

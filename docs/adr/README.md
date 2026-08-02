@@ -12,6 +12,8 @@ Decisions that shape the FlowGraph codebase. Each ADR is immutable once accepted
 | [0006](0006-desktop-bridge.md) | Tauri desktop bridge for Serato filesystem access | Accepted |
 | [0007](0007-spotify-ai-boundary.md) | Spotify content excluded from AI pipelines | Accepted |
 | [0008](0008-prisma-7.md) | Prisma 7 as the ORM, hand-wired into Rikta DI | Accepted |
+| [0009](0009-ai-provider.md) | AI provider behind a port, defaulting to Claude | Accepted |
+| [0010](0010-serato-format-scope.md) | Serato format scope — read everything, write crates only | Accepted |
 
 ## Format
 

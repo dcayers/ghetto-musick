@@ -14,6 +14,12 @@ The product also treats local files as the **source of truth** for DJ metadata (
 
 Ship a **signed Tauri 2.x desktop bridge** that the user explicitly installs and authorizes. It is a *bridge*, not the application: the web app remains the UI and remains independently deployable.
 
+### Support matrix: macOS only
+
+**macOS is the only supported platform.** Windows is out of scope until there is a second user who needs it. This halves the fixture matrix that Phase S0 must cover (§12.3) and removes an entire class of path-handling divergence — Windows drive letters, path separators, and case-insensitivity all interact with the drive-relative paths Serato stores.
+
+Keep path handling behind a single canonicalization helper anyway, so adding Windows later is a bounded change rather than an audit of every filesystem call.
+
 ### Responsibilities
 
 Discover configured Serato roots and crates · parse library/crate metadata read-only · fingerprint local files and send normalized manifests (never audio) · run local audio analysis · stage crate/export artifacts · later, apply approved cue changes with backup and verification.
@@ -33,6 +39,8 @@ Discover configured Serato roots and crates · parse library/crate metadata read
 - **FFprobe** — media properties and format validation.
 - **`music-metadata`** — tag parsing, in-process. Preferred over spawning FFprobe per file: §20.2 requires sandboxing analysis subprocesses with time and resource limits, so every subprocess avoided is one less sandbox to manage across a multi-thousand-file scan.
 - **Native aubio or Rust DSP crates** — waveform peaks, loudness, BPM/key, onset/beat/phrase candidates. **Not `essentia.js`**, which remains at `0.1.3` and is far too slow for library-scale batch analysis in WASM.
+
+**Analysis-binary licensing is deferred, deliberately.** This is a personal-use tool for now, so aubio (GPL) and Essentia (AGPL) are unproblematic. Record the constraint rather than forgetting it: **distributing** a desktop binary that links GPL/AGPL DSP code imposes obligations on the whole binary. If FlowGraph is ever distributed to anyone else, that decision reopens — either subprocess isolation, an MIT/Apache-licensed Rust DSP crate, or accepting copyleft. Keep the analyzer behind the `AudioAnalyzer` port so the swap stays contained.
 
 Analyzer name, version, parameters, confidence, source fingerprint, and timestamp are recorded with every result; results are invalidated when the file fingerprint changes.
 

@@ -852,6 +852,18 @@ PostgreSQL with encryption, automated backups, PITR, connection pooling, tested 
 
 ### 18.4 Deployment strategy
 
+**Current state: local development only** (decision 18). Nothing below is active work — it is the shape to deploy into when the time comes.
+
+**Vercel cannot host the whole system.** It suits `apps/web` well — TanStack Start deploys there cleanly. It is a poor fit for `apps/api` and `apps/worker`: the API is a long-running Fastify server, and the worker holds a persistent Redis connection and processes a BullMQ queue. Neither maps to a serverless function model. Plan for a split when deploying:
+
+| Unit | Target |
+|---|---|
+| `web` | Vercel |
+| `api` + `worker` | A container platform — Railway, Render, or Fly |
+| PostgreSQL | Neon or Supabase |
+| Redis | Upstash or the platform's managed Redis |
+| Object storage | Any S3-compatible service |
+
 Start with a managed container platform, not Kubernetes · deploy immutable images by digest · run backward-compatible migrations as a dedicated release step · deploy API/worker after expand migrations, clean up old columns in a later release · rolling or blue/green with automatic rollback on health/SLO regression · declare infrastructure with Terraform or platform-equivalent IaC.
 
 ### 18.5 Backups and disaster recovery
@@ -1062,9 +1074,11 @@ Durations assume a small product team of 3–5 engineers plus product/design, an
 
 **GA criteria** — SLOs met four consecutive weeks · restore drill and incident simulation passed · no unresolved critical security or data-loss issues · cue export may remain labeled beta.
 
-### 25.9 Solo critical path
+### 25.9 Solo critical path — **this is the active plan**
 
-The phases above assume 3–5 engineers over 34 weeks. At the same scope, one developer should expect a multi-year project. If this is a solo build, **the scope is the thing to change, not the schedule.** Two adjustments make it tractable:
+Confirmed 2026-08-02: this is a solo build. §25.1–25.8 above remain the reference decomposition, but the ordering and scope below supersede them.
+
+The phases above assume 3–5 engineers over 34 weeks. At the same scope, one developer should expect a multi-year project. **The scope is the thing to change, not the schedule.** Two adjustments make it tractable:
 
 **Adjustment 1 — reorder Serato ahead of Spotify.** The plan sequences Spotify in Phase 1 as the bootstrap catalog, but Spotify costs OAuth, encrypted token storage, refresh locking, rate-limit handling, and an AI policy gate (§13) to deliver metadata that §4.3 explicitly ranks *below* your own files. If you already have a Serato library, read-only Serato import gives better data for less machinery. Move Spotify to a later phase and treat it as a nice-to-have.
 
@@ -1227,18 +1241,25 @@ A story is done only when:
 | 9 | Audio analysis library | Native aubio/Rust in the bridge; **not** essentia.js (0.1.3) |
 | 10 | Node version | 22 LTS |
 
-### Still open before coding beyond Phase 0
+### Closed 2026-08-02 — the remaining eight
 
-1. Exact Rikta patch version after a production build/deploy spike, plus Prisma 7 validation.
-2. Tauri bridge support matrix — macOS first, or macOS + Windows.
-3. Which Serato data formats can be safely read, and which if any written.
-4. Track fingerprint method and licensing/distribution of analysis binaries.
-5. Whether graph duplicates of the same track are allowed in v1.
-6. AI provider/model and the approved policy-safe metadata envelope.
-7. Managed deployment provider, region, recovery targets, budget.
-8. Solo vs team path (§25.9), which determines whether Spotify stays in Phase 1.
+| # | Decision | Resolution |
+|---|---|---|
+| 11 | Solo vs team path | **Solo.** §25.9 is the delivery plan: Serato before Spotify; AI, cue export, and branches deferred |
+| 12 | Rikta version | **`0.12.0`** — still the latest published (2026-07-03). Prisma 7 validated locally; production build/deploy spike still outstanding |
+| 13 | Tauri support matrix | **macOS only.** Windows out of scope until a second user needs it (ADR-0006) |
+| 14 | Serato formats | **Read** database V2, crates, and GEOB tags on MP3/AIFF · **write new `.crate` files only** · **cue writing deferred indefinitely** · Ogg Vorbis excluded (ADR-0010) |
+| 15 | Fingerprinting + analysis licensing | Personal use, so GPL/AGPL analyzers are fine now. Constraint recorded against any future distribution (ADR-0006) |
+| 16 | Duplicate graph nodes | **Not allowed in v1** — matches the existing `@@unique([graphId, trackId])` constraint |
+| 17 | AI provider | **Configurable port, default `claude-opus-5`** via `@anthropic-ai/sdk` (ADR-0009) |
+| 18 | Deployment | **Local development only for now.** Vercel intended for the web app later — see the split in §18.4 |
 
-No open decision blocks the library and graph vertical slice unless it changes stored identifiers or ownership boundaries.
+### Still open
+
+1. Production build and deploy spike for Rikta (deferred with decision 18 — nothing to deploy to yet).
+2. Track fingerprint method (the *algorithm*; the licensing half of the old decision 4 is closed).
+
+Neither blocks any current work.
 
 ---
 
