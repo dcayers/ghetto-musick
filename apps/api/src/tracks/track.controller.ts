@@ -112,11 +112,11 @@ export class TrackController {
       "response's `nextCursor` to fetch the following page; a null cursor " +
       "means the last page.",
   })
-  @ApiQuery({ name: "query", required: false, description: "Case-insensitive match on title or artist." })
-  @ApiQuery({ name: "bpmMin", required: false, description: "Lower bound on BPM (inclusive)." })
-  @ApiQuery({ name: "bpmMax", required: false, description: "Upper bound on BPM (inclusive)." })
-  @ApiQuery({ name: "cursor", required: false, description: "Opaque cursor from a previous response." })
-  @ApiQuery({ name: "limit", required: false, description: "Page size, 1-100. Defaults to 50." })
+  @ApiQuery({ name: "query", required: false, type: "string", description: "Case-insensitive match on title or artist." })
+  @ApiQuery({ name: "bpmMin", required: false, type: "number", description: "Lower bound on BPM (inclusive)." })
+  @ApiQuery({ name: "bpmMax", required: false, type: "number", description: "Upper bound on BPM (inclusive)." })
+  @ApiQuery({ name: "cursor", required: false, type: "string", description: "Opaque cursor from a previous response." })
+  @ApiQuery({ name: "limit", required: false, type: "integer", description: "Page size, 1-100. Defaults to 50." })
   @ApiOkResponse({ description: "A page of tracks.", schema: trackPageSchema })
   @ApiBadRequestResponse({
     description: "Query parameters failed validation.",
@@ -143,7 +143,7 @@ export class TrackController {
       "distinct status would confirm the row exists and turn the response " +
       "code into a cross-workspace existence oracle.",
   })
-  @ApiParam({ name: "trackId", description: "Track UUID." })
+  @ApiParam({ name: "trackId", type: "string", description: "Track UUID." })
   @ApiOkResponse({ description: "The track.", schema: trackSchema })
   @ApiNotFoundResponse({
     description: "No such track in the caller's workspace.",

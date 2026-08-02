@@ -812,7 +812,7 @@
             "required": false,
             "description": "Page size, 1-100. Defaults to 50.",
             "schema": {
-              "type": "string"
+              "type": "integer"
             }
           },
           {
@@ -830,7 +830,7 @@
             "required": false,
             "description": "Upper bound on BPM (inclusive).",
             "schema": {
-              "type": "string"
+              "type": "number"
             }
           },
           {
@@ -839,7 +839,7 @@
             "required": false,
             "description": "Lower bound on BPM (inclusive).",
             "schema": {
-              "type": "string"
+              "type": "number"
             }
           },
           {

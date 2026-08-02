@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/**
+ * FlowGraph design tokens.
+ *
+ * Extracted from the UI mockups so colour lives in one place. The prototype
+ * this project replaced defined `bg-background` against a CSS variable that
+ * was never declared, and sprinkled shadcn class names that resolved to
+ * nothing — 14 dead utilities across 4 files. Tokens are declared here and
+ * nowhere else.
+ *
+ * Tailwind 4 is CSS-first: `@theme` entries become utilities automatically,
+ * so `--color-surface-raised` gives you `bg-surface-raised`.
+ */
+
+@theme {
+  /* Surfaces — near-black, layered by elevation rather than by opacity. */
+  --color-canvas: #0b0b10;
+  --color-surface: #101017;
+  --color-surface-raised: #16161f;
+  --color-surface-overlay: #1c1c27;
+
+  --color-border: #23232f;
+  --color-border-strong: #2f2f3d;
+
+  /* Text */
+  --color-ink: #f2f2f7;
+  --color-ink-muted: #9a9aab;
+  --color-ink-subtle: #6b6b7d;
+
+  /* Brand — the violet on primary actions and selected nodes. */
+  --color-accent: #7c5cff;
+  --color-accent-hover: #8f73ff;
+  --color-accent-muted: #2a2145;
+
+  /* Musical metadata. BPM and key are read constantly and at a glance, so
+     they get their own hues rather than sharing the body text colour. */
+  --color-bpm: #6ea8fe;
+  --color-key: #f472b6;
+  --color-energy: #a78bfa;
+
+  /* Transition edges. Deliberately six distinguishable hues: plan §9.6
+     forbids encoding transition type by colour *alone*, so these accompany a
+     text label rather than replacing it. */
+  --color-edge-blend: #22d3ee;
+  --color-edge-filter: #a3e635;
+  --color-edge-echo: #c084fc;
+  --color-edge-cut: #fb7185;
+  --color-edge-loop: #fbbf24;
+  --color-edge-default: #64748b;
+
+  /* Status */
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+
+  --radius-panel: 0.75rem;
+  --radius-node: 0.625rem;
+}
+
+/* Base ------------------------------------------------------------------- */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Plan §9.6: respect reduced motion. Applies to React Flow's pan/zoom
+   transitions as well as our own. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus — plan §9.6 requires clear focus states. React Aria sets
+   data-focus-visible, which is keyboard-only, so pointer users do not get a
+   ring but keyboard users always do. */
+[data-focus-visible] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* React Flow ------------------------------------------------------------- */
+
+.react-flow {
+  --xy-background-color: var(--color-canvas);
+  --xy-edge-stroke-default: var(--color-edge-default);
+  --xy-edge-stroke-width-default: 2;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__handle {
+  width: 9px;
+  height: 9px;
+  background: var(--color-surface-overlay);
+  border: 2px solid var(--color-border-strong);
+}
+
+.react-flow__handle-connecting {
+  background: var(--color-accent);
+}
+
+.react-flow__edge-text {
+  fill: var(--color-ink-muted);
+  font-size: 11px;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--color-surface);
+}
