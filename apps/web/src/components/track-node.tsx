@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { Artwork, Bpm, CamelotKey, EnergyDots } from "./primitives.js";
+import { Artwork, Bpm, CamelotKey, EnergyDots, cx } from "./primitives.js";
+import { MiniWaveform } from "./ui.js";
 
 /**
  * A track on the canvas.
@@ -20,37 +21,44 @@ export interface TrackNodeData extends Record<string, unknown> {
   readonly simplified: boolean;
 }
 
+const HANDLE = "!size-2.5 !border-2 !border-border-strong !bg-surface-overlay";
+
 export const TrackNode = memo(function TrackNode({
   data,
   selected,
 }: NodeProps<Node<TrackNodeData>>) {
-  const border = selected ? "border-accent" : "border-border";
-
   if (data.simplified) {
     // Simplified rendering below the zoom threshold. Plan §9.8 lists this as
-    // the first mitigation for the 1k-node budget: fewer DOM nodes per track
-    // is the only thing that actually helps at that scale.
+    // the first mitigation for the 1k-node budget, and fewer DOM nodes per
+    // track is the only thing that actually helps at that scale — so this
+    // variant drops the artwork, waveform, and energy entirely.
     return (
       <div
-        className={`bg-surface-raised ${border} flex items-center gap-2 rounded-md border px-2 py-1`}
+        className={cx(
+          "bg-surface-raised flex items-center gap-2 rounded-md border px-2 py-1",
+          selected ? "border-accent" : "border-border",
+        )}
         title={`${data.artist} — ${data.title}`}
       >
-        <Handle type="target" position={Position.Left} />
+        <Handle type="target" position={Position.Left} className={HANDLE} />
         <span className="text-ink max-w-[120px] truncate text-[11px]">{data.title}</span>
         <Bpm value={data.bpm} />
-        <Handle type="source" position={Position.Right} />
+        <Handle type="source" position={Position.Right} className={HANDLE} />
       </div>
     );
   }
 
   return (
     <div
-      className={`bg-surface-raised ${border} w-[220px] rounded-[10px] border p-2.5 shadow-lg`}
+      className={cx(
+        "bg-surface-raised w-[230px] rounded-[10px] border p-2.5 shadow-lg transition-colors",
+        selected ? "border-accent ring-accent/30 ring-2" : "border-border",
+      )}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} className={HANDLE} />
 
       <div className="flex items-start gap-2">
-        <Artwork seed={data.trackId} size={40} />
+        <Artwork seed={data.trackId} size={38} />
         <div className="min-w-0 flex-1">
           <p className="text-ink truncate text-[13px] font-medium">{data.title}</p>
           <p className="text-ink-muted truncate text-[11px]">{data.artist}</p>
@@ -61,18 +69,12 @@ export const TrackNode = memo(function TrackNode({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        {/* Waveform needs peak data from the desktop bridge (plan §15.2), and
-            the S0 scan found most library entries are streaming with no local
-            file at all. A placeholder bar keeps the layout honest rather than
-            faking a waveform. */}
-        <div className="bg-border h-[3px] flex-1 rounded-full" aria-hidden="true" />
-        <div className="ml-2">
-          <EnergyDots value={data.energy} />
-        </div>
+      <div className="mt-2 flex items-center gap-2">
+        <MiniWaveform trackId={data.trackId} bars={32} className="h-3 flex-1" />
+        <EnergyDots value={data.energy} />
       </div>
 
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} className={HANDLE} />
     </div>
   );
 });

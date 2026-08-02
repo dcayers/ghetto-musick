@@ -290,6 +290,7 @@ export function IconButton({
   isActive,
   isDisabled,
   size = 15,
+  iconClassName,
 }: {
   icon: typeof Star;
   label: string;
@@ -297,22 +298,28 @@ export function IconButton({
   isActive?: boolean;
   isDisabled?: boolean;
   size?: number;
+  /** For glyphs that carry state in their shape — a filled star, say. */
+  iconClassName?: string;
 }) {
   return (
     <Button
-      onPress={onPress}
-      isDisabled={isDisabled}
+      {...(onPress ? { onPress } : {})}
+      {...(isDisabled !== undefined ? { isDisabled } : {})}
       aria-label={label}
-      aria-pressed={isActive}
+      {...(isActive !== undefined ? { "aria-pressed": isActive } : {})}
       className={cx(
+        // The active ring is not decoration. §9.6 forbids signalling state by
+        // hue alone, and `bg-accent-muted` on `bg-surface` is 1.27:1 — invisible
+        // in greyscale. The ring adds an outline that is present or absent
+        // rather than merely a different colour.
         "grid size-7 place-items-center rounded-md transition-colors",
         isActive
-          ? "bg-accent-muted text-accent"
+          ? "bg-accent-muted text-accent ring-accent/70 ring-1"
           : "text-ink-muted hover:bg-surface-raised hover:text-ink",
         isDisabled && "opacity-40",
       )}
     >
-      <Icon size={size} />
+      <Icon size={size} className={iconClassName} />
     </Button>
   );
 }

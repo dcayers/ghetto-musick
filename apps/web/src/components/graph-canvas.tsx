@@ -1,8 +1,7 @@
-import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
@@ -16,6 +15,7 @@ import {
   type OnMove,
 } from "@xyflow/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Lock, Map as MapIcon, Unlock } from "lucide-react";
 import { buildTrackGraph, type ScorableTrack } from "@flowgraph/domain";
 import {
   getGraph,
@@ -27,13 +27,18 @@ import {
   type GraphDetail,
 } from "../lib/graph-api.js";
 import { TrackNode, type TrackNodeData } from "./track-node.js";
-import type { InspectorTrack } from "./inspector.js";
-import { EmptyState } from "./primitives.js";
+import type { InspectorTrackSummary } from "./track-inspector.js";
+import { EmptyState, cx } from "./primitives.js";
+import { CanvasToolbar, CanvasZoomControls, type CanvasTool } from "./canvas-tools.js";
+import { IconButton } from "./ui.js";
 
 const nodeTypes = { track: TrackNode };
 
 /** Below this zoom, nodes render simplified — plan §9.8. */
 const SIMPLIFY_BELOW_ZOOM = 0.55;
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 2;
 
 /** Edge colour per technique. Always paired with a text label (§9.6). */
 const EDGE_COLOR: Record<string, string> = {
@@ -65,9 +70,19 @@ const TECHNIQUE_LABEL: Record<string, string> = {
  * budget ever fails, and it is why the prototype's tag-desync bug (edge data
  * held in two hand-synced arrays) cannot recur here.
  */
+export interface CanvasProps {
+  graphId: string;
+  onSelect: (track: InspectorTrackSummary | null) => void;
+  /** Reports what is on the canvas so the library and timeline can read it. */
+  onTracksChange?: ((tracks: InspectorTrackSummary[]) => void) | undefined;
+  /** Selection driven from outside — clicking a timeline card, say. */
+  selectedTrackId?: string | null | undefined;
+}
+
 function project(
   detail: GraphDetail,
   simplified: boolean,
+  selectedTrackId: string | null,
 ): { nodes: Node<TrackNodeData>[]; edges: Edge[] } {
   const scorable: ScorableTrack[] = detail.nodes.map((node) => ({
     id: node.trackId,
@@ -96,6 +111,7 @@ function project(
     id: node.id,
     type: "track",
     position: { x: node.x, y: node.y },
+    selected: node.trackId === selectedTrackId,
     data: {
       trackId: node.trackId,
       title: node.track.title,
@@ -127,16 +143,13 @@ function project(
   return { nodes, edges };
 }
 
-function Canvas({
-  graphId,
-  onSelect,
-}: {
-  graphId: string;
-  onSelect: (track: InspectorTrack | null) => void;
-}) {
+function Canvas({ graphId, onSelect, onTracksChange, selectedTrackId }: CanvasProps) {
   const queryClient = useQueryClient();
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const [zoom, setZoom] = useState(1);
+  const [tool, setTool] = useState<CanvasTool>("select");
+  const [isLocked, setIsLocked] = useState(false);
+  const [showMiniMap, setShowMiniMap] = useState(true);
   const wrapper = useRef<HTMLDivElement>(null);
 
   // Optimistic-concurrency token. Kept in a ref so a save in flight does not
@@ -154,9 +167,26 @@ function Canvas({
 
   const simplified = zoom < SIMPLIFY_BELOW_ZOOM;
   const projected = useMemo(
-    () => (data ? project(data, simplified) : { nodes: [], edges: [] }),
-    [data, simplified],
+    () => (data ? project(data, simplified, selectedTrackId ?? null) : { nodes: [], edges: [] }),
+    [data, simplified, selectedTrackId],
   );
+
+  // The library and the timeline both need to know what is on the canvas.
+  // Reported up rather than fetched twice, so the two views cannot disagree.
+  const placed = useMemo(
+    () =>
+      (data?.nodes ?? []).map((node) => ({
+        id: node.trackId,
+        title: node.track.title,
+        artist: node.track.artist,
+        bpm: node.track.bpm,
+        keySignature: node.track.keySignature,
+      })),
+    [data],
+  );
+  useEffect(() => {
+    onTracksChange?.(placed);
+  }, [placed, onTracksChange]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(projected.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(projected.edges);
@@ -164,7 +194,7 @@ function Canvas({
   // `useNodesState` seeds from its argument only, so a refetch must be pushed
   // in explicitly. The prototype this replaced had exactly this bug and its
   // add-track flow silently rendered nothing.
-  const projectedKey = `${projected.nodes.length}:${projected.edges.length}:${simplified}`;
+  const projectedKey = `${projected.nodes.length}:${projected.edges.length}:${simplified}:${selectedTrackId ?? ""}`;
   const lastKey = useRef(projectedKey);
   if (lastKey.current !== projectedKey) {
     lastKey.current = projectedKey;
@@ -271,7 +301,12 @@ function Canvas({
   }
 
   return (
-    <div ref={wrapper} className="h-full w-full" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+    <div
+      ref={wrapper}
+      className="relative h-full w-full"
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -299,20 +334,79 @@ function Canvas({
           for (const edge of deleted) deleteEdgeMutation.mutate(edge.id);
         }}
         fitView
-        minZoom={0.1}
-        maxZoom={2}
+        // Without the cap, a two-node graph fits to 200% and the nodes fill
+        // the viewport — technically "fitted", visually absurd.
+        fitViewOptions={{ maxZoom: 1, padding: 0.25 }}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={["Backspace", "Delete"]}
+        // The tool rail drives React Flow's interaction modes rather than
+        // running a parallel implementation: pan is drag-to-pan with node
+        // dragging off, box-select is the built-in selection rectangle.
+        panOnDrag={tool === "pan"}
+        selectionOnDrag={tool === "box-select"}
+        nodesDraggable={!isLocked && tool !== "pan"}
+        nodesConnectable={!isLocked}
+        elementsSelectable={!isLocked}
       >
         <Background gap={20} size={1} color="var(--color-border)" />
-        <Controls />
-        <MiniMap
-          pannable
-          zoomable
-          maskColor="rgba(11,11,16,0.75)"
-          nodeColor="var(--color-accent-muted)"
-        />
+        {showMiniMap && (
+          <MiniMap
+            pannable
+            zoomable
+            // React Flow's default 200×150 eats a quarter of a short canvas
+            // and hides the nodes it is supposed to be summarising.
+            style={{ width: 148, height: 96 }}
+            maskColor="rgba(11,11,16,0.72)"
+            nodeColor={(node) =>
+              node.selected ? "var(--color-accent)" : "var(--color-border-strong)"
+            }
+            nodeStrokeWidth={0}
+          />
+        )}
       </ReactFlow>
+
+      <CanvasToolbar
+        tool={tool}
+        onToolChange={setTool}
+        className="absolute top-3 left-3 z-10"
+      />
+
+      <CanvasZoomControls
+        zoom={zoom}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        onZoomIn={() => zoomIn({ duration: 150 })}
+        onZoomOut={() => zoomOut({ duration: 150 })}
+        onZoomReset={() => zoomTo(1, { duration: 150 })}
+        onFitView={() => fitView({ duration: 200, padding: 0.25, maxZoom: 1 })}
+        className="absolute top-3 right-3 z-10"
+      />
+
+      {/* Lock and minimap sit apart from the zoom cluster because they change
+          what the canvas *is*, not where you are looking at it. */}
+      <div
+        className={cx(
+          "border-border bg-surface absolute right-3 bottom-3 z-10 flex gap-0.5 rounded-lg border p-1 shadow-lg shadow-black/30",
+          showMiniMap && "bottom-[118px]",
+        )}
+      >
+        <IconButton
+          icon={isLocked ? Lock : Unlock}
+          label={isLocked ? "Unlock canvas" : "Lock canvas"}
+          isActive={isLocked}
+          onPress={() => setIsLocked(!isLocked)}
+          size={14}
+        />
+        <IconButton
+          icon={MapIcon}
+          label={showMiniMap ? "Hide minimap" : "Show minimap"}
+          isActive={showMiniMap}
+          onPress={() => setShowMiniMap(!showMiniMap)}
+          size={14}
+        />
+      </div>
 
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -326,16 +420,10 @@ function Canvas({
   );
 }
 
-export function GraphCanvas({
-  graphId,
-  onSelect,
-}: {
-  graphId: string;
-  onSelect: (track: InspectorTrack | null) => void;
-}) {
+export function GraphCanvas(props: CanvasProps) {
   return (
     <ReactFlowProvider>
-      <Canvas graphId={graphId} onSelect={onSelect} />
+      <Canvas {...props} />
     </ReactFlowProvider>
   );
 }
