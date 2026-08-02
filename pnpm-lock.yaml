@@ -50,6 +50,9 @@ importers:
       '@flowgraph/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@flowgraph/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@riktajs/core':
         specifier: 0.12.0
         version: 0.12.0

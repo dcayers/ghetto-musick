@@ -28,8 +28,10 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members WorkspaceMember[]
-  tracks  Track[]
+  members     WorkspaceMember[]
+  tracks      Track[]
+  graphs      Graph[]
+  transitions Transition[]
 
   @@map("workspaces")
 }
@@ -140,6 +142,83 @@ model WorkspaceMember {
   @@map("workspace_members")
 }
 
+// --- Planning graph ---------------------------------------------------------
+
+model Graph {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  name String
+
+  // Optimistic concurrency for bounded layout batches — plan §6.3, §10.1.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  nodes     GraphNode[]
+
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("graphs")
+}
+
+// Position lives here, not on Track — plan §7.2. The same track can appear in
+// several graphs, each with its own layout.
+model GraphNode {
+  id      String @id @db.Uuid
+  graphId String @db.Uuid
+  trackId String @db.Uuid
+
+  x Float
+  y Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  graph Graph @relation(fields: [graphId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Decision 16: duplicate visual occurrences of a track are not allowed in v1.
+  @@unique([graphId, trackId])
+  @@index([trackId])
+  @@map("graph_nodes")
+}
+
+// Transitions are reusable across graphs and **directed** — plan §7.2. An A→B
+// transition is not automatically valid as B→A: the pitch adjustment and
+// energy delta both invert.
+model Transition {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  fromTrackId String @db.Uuid
+  toTrackId   String @db.Uuid
+
+  technique String  @default("blend")
+  notes     String?
+  tags      String[]
+
+  // Snapshot of the deterministic score at authoring time, with the algorithm
+  // version that produced it — plan §10.2. Without the version a weights
+  // change silently reinterprets every stored score.
+  score            Decimal? @db.Decimal(4, 3)
+  scoreAlgorithm   Int?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromTrack Track     @relation("TransitionFrom", fields: [fromTrackId], references: [id], onDelete: Cascade)
+  toTrack   Track     @relation("TransitionTo", fields: [toTrackId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fromTrackId, toTrackId, technique])
+  @@index([workspaceId, fromTrackId])
+  @@index([workspaceId, toTrackId])
+  @@map("transitions")
+}
+
 // --- Track library ----------------------------------------------------------
 
 model Track {
@@ -171,7 +250,10 @@ model Track {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  graphNodes      GraphNode[]
+  transitionsFrom Transition[] @relation("TransitionFrom")
+  transitionsTo   Transition[] @relation("TransitionTo")
 
   // Cursor pagination index. UUIDv7 is time-ordered (ADR-0003), so
   // (createdAt, id) is a stable, total ordering usable as a cursor.

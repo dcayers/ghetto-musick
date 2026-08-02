@@ -2,7 +2,15 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/client.js";
 
 export { PrismaClient } from "./generated/client.js";
-export type { Workspace, User, WorkspaceMember, Track } from "./generated/client.js";
+export type {
+  Workspace,
+  User,
+  WorkspaceMember,
+  Track,
+  Graph,
+  GraphNode,
+  Transition,
+} from "./generated/client.js";
 export { WorkspaceRole } from "./generated/enums.js";
 
 /**

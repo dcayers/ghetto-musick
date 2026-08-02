@@ -21,3 +21,4 @@
 export const TRACK_SERVICE = Symbol.for("flowgraph.TrackService");
 export const HEALTH_SERVICE = Symbol.for("flowgraph.HealthService");
 export const WORKSPACE_CONTEXT = Symbol.for("flowgraph.WorkspaceContextService");
+export const GRAPH_SERVICE = Symbol.for("flowgraph.GraphService");

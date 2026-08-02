@@ -5,6 +5,7 @@ import {
   type OpenApiSecurityScheme,
 } from "@riktajs/swagger";
 import { TrackController } from "./tracks/track.controller.js";
+import { GraphController } from "./graphs/graph.controller.js";
 import { HealthController } from "./health/health.controller.js";
 
 /**
@@ -27,7 +28,7 @@ import { HealthController } from "./health/health.controller.js";
  * the framework were ever replaced.
  */
 
-export const API_CONTROLLERS = [TrackController, HealthController] as const;
+export const API_CONTROLLERS = [TrackController, GraphController, HealthController] as const;
 
 const SECURITY_SCHEMES: Record<string, OpenApiSecurityScheme> = {
   sessionCookie: {
@@ -54,6 +55,7 @@ export const OPENAPI_CONFIG: SwaggerConfig = {
   servers: [{ url: "http://127.0.0.1:4000", description: "Local development" }],
   tags: [
     { name: "Tracks", description: "The track library" },
+    { name: "Graphs", description: "Planning canvas: nodes and transitions" },
     { name: "Health", description: "Liveness and readiness probes" },
   ],
   securitySchemes: SECURITY_SCHEMES,
