@@ -15,15 +15,15 @@ import { trackById } from "../../lib/demo-data.js";
  * dump rather than a view of the thing you selected.
  */
 export function InspectorPanel({ isLoading = false }: { isLoading?: boolean }) {
-  const selection = useWorkspace((state) => state.selection);
+  const selectedTrackId = useWorkspace((state) => state.selectedTrackId);
+  const selectedTransitionId = useWorkspace((state) => state.selectedTransitionId);
   const transitions = useWorkspace((state) => state.transitions);
   const togglePanel = useWorkspace((state) => state.togglePanel);
 
-  const transition =
-    selection?.kind === "transition"
-      ? (transitions.find((tx) => tx.id === selection.transitionId) ?? null)
-      : null;
-  const track = selection?.kind === "track" ? trackById(selection.trackId) : null;
+  const transition = selectedTransitionId
+    ? (transitions.find((tx) => tx.id === selectedTransitionId) ?? null)
+    : null;
+  const track = trackById(selectedTrackId);
 
   return (
     <Panel

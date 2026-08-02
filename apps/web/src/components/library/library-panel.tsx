@@ -265,7 +265,7 @@ export function LibraryPanel() {
   const tracks = useWorkspace((state) => state.tracks);
   const nodes = useWorkspace((state) => state.nodes);
   const filters = useWorkspace((state) => state.filters);
-  const selection = useWorkspace((state) => state.selection);
+  const selectedTrackId = useWorkspace((state) => state.selectedTrackId);
   const setFilters = useWorkspace((state) => state.setFilters);
   const resetFilters = useWorkspace((state) => state.resetFilters);
   const selectTrack = useWorkspace((state) => state.selectTrack);
@@ -290,7 +290,6 @@ export function LibraryPanel() {
   const panelId = useId();
   const rowId = (trackId: string) => `${panelId}-${trackId}`;
 
-  const selectedTrackId = selection?.kind === "track" ? selection.trackId : null;
 
   // Option lists are derived, never authored — a genre that exists only in the
   // data would otherwise be unfilterable, and one that no longer exists would
@@ -620,7 +619,7 @@ export function LibraryPanel() {
                     // Positioned so the add control can sit over the row's own
                     // background — a sibling in normal flow would cut the
                     // selected tint short of the right edge.
-                    className="relative"
+                    className="border-border/60 relative border-b last:border-b-0"
                     // The window renders a slice, so position has to be stated
                     // rather than counted from the DOM.
                     aria-posinset={index + 1}
@@ -674,6 +673,7 @@ export function LibraryPanel() {
                           bars={24}
                           energy={track.energy}
                           muted={isMissing}
+                          {...(isSelected ? { color: "var(--color-waveform-active)" } : {})}
                         />
                       </span>
 

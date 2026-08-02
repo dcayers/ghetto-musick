@@ -319,28 +319,12 @@ function CompactLayout({ library, graph, timeline, inspector }: Surfaces) {
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="relative min-h-0 flex-1">
-        {SURFACES.map(({ id }) => (
-          <TabPanel
-            key={id}
-            id={id}
-            shouldForceMount
-            // Visibility is decided from our own state rather than from a
-            // `data-inert:hidden` variant, so it never depends on which of
-            // `grid` and `hidden` Tailwind happens to emit last.
-            className={cx(
-              "absolute inset-2 min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]",
-              tab === id ? "grid" : "hidden",
-            )}
-          >
-            {content[id]}
-          </TabPanel>
-        ))}
-      </div>
-
+      {/* React Aria registers tab ids while the list renders. Keeping the list
+          first in DOM order prevents force-mounted panels from looking up ids
+          that do not exist yet; `order-2` preserves the bottom navigation. */}
       <TabList
         aria-label="Workspace surface"
-        className="border-border bg-surface flex shrink-0 items-stretch border-t"
+        className="border-border bg-surface order-2 flex shrink-0 items-stretch border-t"
         // Home indicators and rounded corners eat the bottom row of a
         // full-bleed bar. Padding, not a fixed offset, so it costs nothing on
         // hardware without an inset.
@@ -379,6 +363,25 @@ function CompactLayout({ library, graph, timeline, inspector }: Surfaces) {
           </Tab>
         ))}
       </TabList>
+
+      <div className="relative order-1 min-h-0 flex-1">
+        {SURFACES.map(({ id }) => (
+          <TabPanel
+            key={id}
+            id={id}
+            shouldForceMount
+            // Inactive panels retain dimensions so React Flow's resize observer
+            // never sees a 0×0 canvas and logs a warning. Visibility and inert
+            // state still remove them visually and from interaction.
+            className={cx(
+              "absolute inset-2 grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]",
+              tab === id ? "visible z-10" : "invisible pointer-events-none",
+            )}
+          >
+            {content[id]}
+          </TabPanel>
+        ))}
+      </div>
     </Tabs>
   );
 }

@@ -222,13 +222,13 @@ export function Artwork({
  *
  * SVG rather than canvas: a library row is ~32 bars, and at that size the DOM
  * cost is below a canvas context per row. Coloured by the track's energy so
- * the library is scannable — §5 explicitly rejects rendering every waveform
- * violet, which throws away the one signal a DJ scans for.
+ * the library is scannable. Energy remains visible in the adjacent dots while
+ * the shared violet treatment keeps the waveform legible on near-black cards.
  */
 export function Waveform({
   trackId,
   bars = 32,
-  energy = 3,
+  energy: _energy = 3,
   className,
   color,
   muted = false,
@@ -241,7 +241,8 @@ export function Waveform({
   muted?: boolean;
 }) {
   const peaks = waveformPeaks(trackId, bars);
-  const fill = color ?? (muted ? "var(--color-border-strong)" : energyColor(energy));
+  const fill =
+    color ?? (muted ? "var(--color-waveform-muted)" : "var(--color-waveform)");
 
   return (
     <svg
@@ -259,7 +260,7 @@ export function Waveform({
           height={Math.max(1, peak * 18)}
           rx={0.6}
           fill={fill}
-          opacity={muted ? 0.5 : 0.45 + peak * 0.5}
+          opacity={muted ? 0.62 : 0.62 + peak * 0.34}
         />
       ))}
     </svg>

@@ -155,6 +155,7 @@ const COLLAPSED_SUGGESTIONS = 5;
 
 function InspectorBody({ track }: { track: DemoTrack }) {
   const tracks = useWorkspace((state) => state.tracks);
+  const announce = useWorkspace((state) => state.announce);
 
   const [isFavourite, setIsFavourite] = useState(false);
   const [position, setPosition] = useState(0);
@@ -365,7 +366,9 @@ function InspectorBody({ track }: { track: DemoTrack }) {
                 aria-label="Edit comment"
                 className="text-ink hover:text-accent flex min-w-0 items-center gap-1"
               >
-                <span className="min-w-0 truncate">{comment || "Add a comment"}</span>
+                <span className="min-w-0 truncate" title={comment || "Add a comment"}>
+                  {comment || "Add a comment"}
+                </span>
                 <Pencil size={10} className="text-ink-subtle shrink-0" aria-hidden="true" />
               </Button>
             </Field>
@@ -417,7 +420,10 @@ function InspectorBody({ track }: { track: DemoTrack }) {
                   <IconButton
                     icon={Check}
                     label={`Approve suggested cue ${index + 1}, ${cue.label}`}
-                    onPress={() => updateCue(cue.key, { status: "approved" })}
+                    onPress={() => {
+                      updateCue(cue.key, { status: "approved" });
+                      announce(`Hot cue ${index + 1}, ${cue.label}, approved.`);
+                    }}
                     size={12}
                   />
                 )}

@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { Layers, Sparkles, TriangleAlert } from "lucide-react";
-import { trackById, type DemoTrack } from "../../lib/demo-data.js";
+import { trackById } from "../../lib/demo-data.js";
 import { useWorkspace } from "../../state/workspace.js";
 import {
   Artwork,
@@ -36,27 +36,6 @@ export interface TrackNodeData extends Record<string, unknown> {
   readonly isAiSuggested: boolean;
 }
 
-/**
- * The single announcement a screen reader gets for the node (§17).
- *
- * React Flow focuses an unnamed `role="group"` wrapper it owns, so the node
- * body carries the name. It is spoken as one sentence rather than eight
- * fragments because a graph node is read in passing, while arrowing across a
- * canvas — "Innerbloom, RÜFÜS DU SOL, 122, 8A, energy…" is not a sentence.
- */
-function describe(track: DemoTrack, data: TrackNodeData): string {
-  const parts = [`${track.title} by ${track.artist}`];
-  if (track.bpm !== null) parts.push(`${Math.round(track.bpm)} BPM`);
-  if (track.keySignature) parts.push(`key ${track.keySignature}`);
-  parts.push(`energy ${track.energy} of 5`);
-  if (data.setPosition !== null) parts.push(`position ${data.setPosition} in set`);
-  if (data.isAiSuggested) parts.push("AI suggested");
-  if (track.source === "missing") parts.push("local file missing");
-  if (track.source === "streaming") parts.push("streaming only");
-  if (track.hasStems) parts.push("stems available");
-  return parts.join(", ");
-}
-
 export const TrackNode = memo(function TrackNode({
   data,
   selected,
@@ -69,7 +48,7 @@ export const TrackNode = memo(function TrackNode({
    * itself would do exactly that.
    */
   const isPrimary = useWorkspace(
-    (state) => state.selection?.kind === "track" && state.selection.trackId === data.trackId,
+    (state) => state.selectedTrackId === data.trackId,
   );
   const inMultiSelection = useWorkspace((state) =>
     state.multiSelectedTrackIds.includes(data.trackId),
@@ -101,7 +80,6 @@ export const TrackNode = memo(function TrackNode({
     );
   }
 
-  const label = describe(track, data);
   const missing = track.source === "missing";
 
   if (data.simplified) {
@@ -113,8 +91,7 @@ export const TrackNode = memo(function TrackNode({
      */
     return (
       <div
-        role="img"
-        aria-label={label}
+        aria-hidden="true"
         style={{
           width: NODE_WIDTH,
           ...(data.inActiveSet ? { borderLeftColor: "var(--color-accent)" } : {}),
@@ -143,16 +120,12 @@ export const TrackNode = memo(function TrackNode({
 
   return (
     /*
-     * `role="img"` collapses the whole card into one labelled unit: everything
-     * inside is decoration for the sentence above, and eight separately
-     * announced fragments per node is unusable on a canvas. Keyboard focus is
-     * drawn by the global `:focus-visible` outline in theme.css, which lands on
-     * React Flow's focusable wrapper — this element never receives focus, so
-     * styling it for focus here would be dead code.
+     * The React Flow wrapper is a focusable, labelled button. Everything inside
+     * is visual decoration for that control, so it stays out of the accessibility
+     * tree instead of presenting the selectable node as an image.
      */
     <div
-      role="img"
-      aria-label={label}
+      aria-hidden="true"
       style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
       className={cx(
         "rounded-card relative flex flex-col justify-between gap-1.5 border px-2.5 py-2 transition-colors",
@@ -208,6 +181,7 @@ export const TrackNode = memo(function TrackNode({
           bars={28}
           energy={track.energy}
           muted={track.source !== "local"}
+          {...(isSelected ? { color: "var(--color-waveform-active)" } : {})}
           className="flex-1"
         />
         <EnergyDots value={track.energy} size={5} />

@@ -49,6 +49,9 @@
   --color-energy-4: #fbbf24;
   --color-energy-5: #fb7185;
   --color-energy: #a78bfa;
+  --color-waveform: #8b72e8;
+  --color-waveform-active: #b7a7ff;
+  --color-waveform-muted: #57506f;
 
   /* Transition techniques. §7 forbids colour as the *only* cue, so every edge
      also carries a technique label and a dash pattern. */

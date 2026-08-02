@@ -168,6 +168,7 @@ export const TransitionEdge = memo(function TransitionEdge({
           // The renderer's container is pointer-events:none so edges stay
           // clickable through it; the label has to opt back in.
           className="nodrag nopan absolute flex items-center gap-1"
+          onClick={(event) => event.stopPropagation()}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             pointerEvents: "all",
@@ -180,7 +181,7 @@ export const TransitionEdge = memo(function TransitionEdge({
             }}
             aria-label={ariaLabel}
             className={cx(
-              "bg-surface-overlay flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium whitespace-nowrap",
+              "bg-surface-overlay flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] font-medium whitespace-nowrap",
               isAiSuggested ? "border-dashed" : "border-solid",
               selected && "ring-accent ring-1",
             )}
@@ -192,7 +193,7 @@ export const TransitionEdge = memo(function TransitionEdge({
                 : selected || inActiveSet
                   ? color
                   : "var(--color-border-strong)",
-              opacity: weight === "alt" ? 0.6 : 1,
+              opacity: weight === "alt" ? 0.72 : 1,
             }}
           >
             {isAiSuggested && <Sparkles size={9} aria-hidden="true" className="text-accent" />}

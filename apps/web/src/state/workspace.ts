@@ -14,7 +14,7 @@ import {
 /**
  * The workspace store.
  *
- * One selection, read by four surfaces. §13 requires the library, graph,
+ * One mutually-exclusive subject, read by four surfaces. §13 requires the library, graph,
  * inspector, and timeline to agree at all times, and the only way to
  * guarantee that is for none of them to own the answer — before this, the
  * canvas held selection and passed a copy up through props, which meant the
@@ -24,11 +24,6 @@ import {
  */
 
 /* ------------------------------------------------------------- selection -- */
-
-export type Selection =
-  | { readonly kind: "track"; readonly trackId: string }
-  | { readonly kind: "transition"; readonly transitionId: string }
-  | null;
 
 export type PanelKey = "library" | "inspector" | "timeline";
 
@@ -41,8 +36,8 @@ export interface PanelState {
 /** §2 — sensible minimums and maximums for the resizable boundaries. */
 export const PANEL_LIMITS: Readonly<Record<PanelKey, { min: number; max: number; initial: number }>> =
   {
-    library: { min: 240, max: 360, initial: 280 },
-    inspector: { min: 320, max: 460, initial: 360 },
+    library: { min: 240, max: 360, initial: 260 },
+    inspector: { min: 320, max: 460, initial: 320 },
     timeline: { min: 180, max: 380, initial: 250 },
   };
 
@@ -80,8 +75,9 @@ interface WorkspaceState {
   set: DemoSet;
 
   /* Selection */
-  selection: Selection;
-  /** Multi-select on the canvas; the primary selection stays in `selection`. */
+  selectedTrackId: string | null;
+  selectedTransitionId: string | null;
+  /** Multi-select on the canvas; the primary track stays in `selectedTrackId`. */
   multiSelectedTrackIds: readonly string[];
 
   /* View */
@@ -125,7 +121,7 @@ interface WorkspaceState {
 
 /* ------------------------------------------------------------ persistence -- */
 
-const STORAGE_KEY = "flowgraph.workspace.v1";
+const STORAGE_KEY = "flowgraph.workspace.v2";
 
 interface Persisted {
   panels?: Record<string, PanelState>;
@@ -228,7 +224,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   set: ACTIVE_SET,
 
   // §4: the workspace opens on a track, never on an empty inspector.
-  selection: { kind: "track", trackId: "trk-innerbloom" },
+  selectedTrackId: "trk-innerbloom",
+  selectedTransitionId: null,
   multiSelectedTrackIds: [],
 
   view: "graph",
@@ -242,19 +239,27 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
 
   selectTrack: (trackId) =>
     set({
-      selection: trackId ? { kind: "track", trackId } : null,
+      selectedTrackId: trackId,
+      selectedTransitionId: null,
       multiSelectedTrackIds: [],
     }),
 
   selectTransition: (transitionId) =>
     set({
-      selection: transitionId ? { kind: "transition", transitionId } : null,
+      selectedTrackId: null,
+      selectedTransitionId: transitionId,
       multiSelectedTrackIds: [],
     }),
 
-  setMultiSelection: (trackIds) => set({ multiSelectedTrackIds: [...trackIds] }),
+  setMultiSelection: (trackIds) =>
+    set({
+      selectedTrackId: trackIds[0] ?? null,
+      selectedTransitionId: null,
+      multiSelectedTrackIds: [...trackIds],
+    }),
 
-  clearSelection: () => set({ selection: null, multiSelectedTrackIds: [] }),
+  clearSelection: () =>
+    set({ selectedTrackId: null, selectedTransitionId: null, multiSelectedTrackIds: [] }),
 
   setView: (view) => set({ view }),
 
@@ -317,7 +322,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       if (state.nodes.some((node) => node.trackId === trackId)) return state;
       return {
         nodes: [...state.nodes, { id: `node-${trackId}`, trackId, x, y }],
-        selection: { kind: "track", trackId },
+        selectedTrackId: trackId,
+        selectedTransitionId: null,
         saveState: "unsaved",
       };
     }),
@@ -325,7 +331,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   removeTransition: (transitionId) =>
     set((state) => ({
       transitions: state.transitions.filter((tx) => tx.id !== transitionId),
-      selection: null,
+      selectedTransitionId: null,
       saveState: "unsaved",
     })),
 
@@ -349,15 +355,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
  */
 
 export function useSelectedTrackId(): string | null {
-  return useWorkspace((state) =>
-    state.selection?.kind === "track" ? state.selection.trackId : null,
-  );
+  return useWorkspace((state) => state.selectedTrackId);
 }
 
 export function useSelectedTransitionId(): string | null {
-  return useWorkspace((state) =>
-    state.selection?.kind === "transition" ? state.selection.transitionId : null,
-  );
+  return useWorkspace((state) => state.selectedTransitionId);
 }
 
 /** Track ids on the active set path, as a Set for O(1) membership tests. */

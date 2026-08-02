@@ -520,14 +520,14 @@ export function trackById(id: string | null | undefined): DemoTrack | null {
  * right along the middle; the two branches bow above and below it.
  */
 export const NODES: readonly DemoGraphNode[] = [
-  { id: "node-awake", trackId: "trk-awake", x: 0, y: 165 },
-  { id: "node-afterglow", trackId: "trk-afterglow", x: 285, y: 35 },
-  { id: "node-the-less-i-know", trackId: "trk-the-less-i-know", x: 265, y: 330 },
-  { id: "node-innerbloom", trackId: "trk-innerbloom", x: 570, y: 185 },
-  { id: "node-night-drive", trackId: "trk-night-drive", x: 855, y: 55 },
-  { id: "node-opus", trackId: "trk-opus", x: 1105, y: -95 },
-  { id: "node-glue", trackId: "trk-glue", x: 1120, y: 320 },
-  { id: "node-losing-it", trackId: "trk-losing-it", x: 1390, y: 150 },
+  { id: "node-awake", trackId: "trk-awake", x: 0, y: 200 },
+  { id: "node-afterglow", trackId: "trk-afterglow", x: 285, y: -20 },
+  { id: "node-the-less-i-know", trackId: "trk-the-less-i-know", x: 265, y: 430 },
+  { id: "node-innerbloom", trackId: "trk-innerbloom", x: 570, y: 200 },
+  { id: "node-night-drive", trackId: "trk-night-drive", x: 855, y: -10 },
+  { id: "node-opus", trackId: "trk-opus", x: 1105, y: -240 },
+  { id: "node-glue", trackId: "trk-glue", x: 1120, y: 430 },
+  { id: "node-losing-it", trackId: "trk-losing-it", x: 1390, y: 190 },
 ];
 
 /**

@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from "react-aria-components";
 import { ChevronDown, Star, Plus } from "lucide-react";
-import { cx, energyColor, Waveform } from "./primitives.js";
+import { cx, Waveform } from "./primitives.js";
 import { useWorkspace } from "../state/workspace.js";
 import { waveformPeaks } from "../lib/demo-data.js";
 
@@ -39,7 +39,7 @@ export interface WaveformCue {
 export function DetailWaveform({
   trackId,
   durationSeconds,
-  energy = 3,
+  energy: _energy = 3,
   cues = [],
   positionSeconds,
   onSeek,
@@ -53,7 +53,7 @@ export function DetailWaveform({
 }) {
   const bars = 128;
   const peaks = waveformPeaks(trackId, bars);
-  const color = energyColor(energy);
+  const color = "var(--color-waveform-active)";
 
   return (
     <div className="relative">
@@ -82,7 +82,7 @@ export function DetailWaveform({
             height={Math.max(2, peak * 60)}
             rx={0.6}
             fill={color}
-            opacity={0.32 + peak * 0.5}
+            opacity={0.58 + peak * 0.38}
           />
         ))}
       </svg>
@@ -195,11 +195,11 @@ export function Field({
   aside?: ReactNode;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-[3px]">
-      <dt className="text-ink-subtle shrink-0 text-[11px]">{label}</dt>
-      <dd className="text-ink flex min-w-0 items-baseline justify-end gap-1.5 text-right text-[11px]">
-        <span className="min-w-0 truncate">{children}</span>
-        {aside}
+    <div className="grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2 py-[3px]">
+      <dt className="text-ink-subtle text-[11px]">{label}</dt>
+      <dd className="text-ink flex min-w-0 flex-wrap items-baseline justify-end gap-x-1.5 gap-y-1 text-right text-[11px]">
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+        <span className="shrink-0">{aside}</span>
       </dd>
     </div>
   );

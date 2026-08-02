@@ -56,9 +56,9 @@ import { PANEL_LIMITS, useWorkspace, type OverlayMetric } from "../state/workspa
  * the only way to guarantee that; a `gap-1.5` class would silently drift the
  * moment the root font size changed.
  */
-const CARD_WIDTH = 150;
-const TRANSITION_WIDTH = 76;
-const LANE_GAP = 6;
+const CARD_WIDTH = 118;
+const TRANSITION_WIDTH = 50;
+const LANE_GAP = 4;
 /** Card + its trailing transition block, i.e. the distance between two cards. */
 const SLOT_STEP = CARD_WIDTH + TRANSITION_WIDTH + LANE_GAP * 2;
 
@@ -66,7 +66,7 @@ const CHART_HEIGHT = 72;
 /** Keeps the extreme points off the chart edges so their circles aren't clipped. */
 const CHART_PAD = 10;
 /** The axis gutter, pinned outside the scroller so it stays legible while panning. */
-const AXIS_WIDTH = 38;
+const AXIS_WIDTH = 24;
 
 function laneWidth(count: number): number {
   if (count <= 0) return 0;
@@ -169,7 +169,8 @@ export function SetTimeline() {
   const transitions = useWorkspace((state) => state.transitions);
   const overlayMetric = useWorkspace((state) => state.overlayMetric);
   const setOverlayMetric = useWorkspace((state) => state.setOverlayMetric);
-  const selection = useWorkspace((state) => state.selection);
+  const selectedTrackId = useWorkspace((state) => state.selectedTrackId);
+  const selectedTransitionId = useWorkspace((state) => state.selectedTransitionId);
   const selectTrack = useWorkspace((state) => state.selectTrack);
   const selectTransition = useWorkspace((state) => state.selectTransition);
   const reorderSet = useWorkspace((state) => state.reorderSet);
@@ -193,9 +194,6 @@ export function SetTimeline() {
       return track ? [{ index, track }] : [];
     });
   }, [set.trackIds, tracks]);
-
-  const selectedTrackId = selection?.kind === "track" ? selection.trackId : null;
-  const selectedTransitionId = selection?.kind === "transition" ? selection.transitionId : null;
 
   const domain = useMemo(
     () =>
@@ -333,7 +331,7 @@ export function SetTimeline() {
               would let the curve drift out of alignment with its cards, which
               is the one thing this panel cannot get wrong. */}
           <div className="h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex h-full w-max flex-col gap-2 pt-3 pr-3 pl-1">
+            <div className="flex h-full w-max flex-col gap-2 pt-2 pr-1 pl-0.5">
               {/* The lane gets the leftover height and keeps its natural size
                   inside it (`min-h-0` so the cards cannot push the band down).
                   That is what fixes the band to CHART_HEIGHT above the bottom
@@ -490,7 +488,7 @@ function TrackSlotWithLink({
             onMove(index, index + delta, track.title);
           }}
           className={cx(
-            "bg-surface-raised flex h-full w-full flex-col gap-2 rounded-lg border p-2 text-left outline-none transition-colors",
+            "bg-surface-raised flex h-full w-full flex-col gap-1.5 rounded-lg border p-1.5 text-left outline-none transition-colors",
             // Selection is not signalled by hue alone: the ring adds visible
             // weight, which survives any colour vision deficiency.
             isSelected
@@ -500,7 +498,7 @@ function TrackSlotWithLink({
         >
           <div className="flex items-start gap-2">
             <div className="relative shrink-0">
-              <Artwork seed={track.id} size={36} />
+              <Artwork seed={track.id} size={32} />
               <span
                 className={cx(
                   "absolute -top-1.5 -right-1.5 grid size-[17px] place-items-center rounded-full border text-[9px] font-semibold tabular-nums",
@@ -528,7 +526,12 @@ function TrackSlotWithLink({
             </span>
           </div>
 
-          <Waveform trackId={track.id} bars={24} energy={track.energy} />
+          <Waveform
+            trackId={track.id}
+            bars={24}
+            energy={track.energy}
+            {...(isSelected ? { color: "var(--color-waveform-active)" } : {})}
+          />
 
           <span className="text-ink-subtle text-right font-mono text-[10px] tabular-nums">
             {formatDuration(track.durationSeconds)}
@@ -731,12 +734,12 @@ function MetricCurve({
 
         {hasCurve && (
           <>
-            <polygon points={area} fill={color} opacity={0.12} />
+            <polygon points={area} fill={color} opacity={0.2} />
             <polyline
               points={line}
               fill="none"
               stroke={color}
-              strokeWidth={1.5}
+              strokeWidth={2.25}
               strokeLinejoin="round"
               strokeLinecap="round"
             />

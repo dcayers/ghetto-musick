@@ -32,7 +32,6 @@ import type {
 import {
   useActiveSetTransitionIds,
   useWorkspace,
-  type Selection,
 } from "../../state/workspace.js";
 
 /**
@@ -59,17 +58,19 @@ const SIMPLIFY_BELOW_ZOOM = 0.45;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 2;
 
-/** Without the cap a six-node graph "fits" at 200% and fills the viewport. */
 /**
  * Opening viewport.
  *
- * `minZoom` is the important one. A six-deep chain of 240px nodes is ~1630px
- * wide, and fitting all of it into a ~900px canvas lands at 43% — where a node
- * is 100px and its title is 6px, i.e. a diagram of the graph rather than the
- * graph. The floor keeps nodes legible and centres the cluster instead, which
- * is what §4 actually asks for; the rest is one pan or a Fit press away.
+ * Pixel padding is stable across panel widths, and the fit is allowed to zoom
+ * below the node-detail threshold so every node dimension is actually inside
+ * the current canvas. A minimum fit zoom made the old "Fit" action knowingly
+ * clip the leftmost node on narrower desktop workspaces.
  */
-const FIT_VIEW_OPTIONS = { minZoom: 0.72, maxZoom: 1, padding: 0.12 } as const;
+const FIT_VIEW_OPTIONS = {
+  minZoom: MIN_ZOOM,
+  maxZoom: 1,
+  padding: { x: "56px", y: "48px" },
+} as const;
 
 /**
  * Middle and right mouse buttons.
@@ -94,7 +95,8 @@ interface ProjectionInput {
   readonly transitions: readonly DemoTransition[];
   readonly activeSet: DemoSet;
   readonly activeSetTransitionIds: ReadonlySet<string>;
-  readonly selection: Selection;
+  readonly selectedTrackId: string | null;
+  readonly selectedTransitionId: string | null;
   readonly multiSelectedTrackIds: readonly string[];
   readonly simplified: boolean;
 }
@@ -114,7 +116,8 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
     transitions,
     activeSet,
     activeSetTransitionIds,
-    selection,
+    selectedTrackId,
+    selectedTransitionId,
     multiSelectedTrackIds,
     simplified,
   } = input;
@@ -176,16 +179,18 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
   const selectedTrackIds =
     multiSelectedTrackIds.length > 0
       ? new Set(multiSelectedTrackIds)
-      : new Set(selection?.kind === "track" ? [selection.trackId] : []);
-
-  const selectedTransitionId =
-    selection?.kind === "transition" ? selection.transitionId : null;
+      : new Set(selectedTrackId ? [selectedTrackId] : []);
 
   const nodes: CanvasNode[] = placed.map(({ node, track }) => ({
     id: node.id,
     type: "track",
     position: { x: node.x, y: node.y },
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
     selected: selectedTrackIds.has(track.id),
+    focusable: true,
+    ariaRole: "button",
+    ariaLabel: `${track.title} by ${track.artist}${track.bpm === null ? "" : `, ${Math.round(track.bpm)} BPM`}${track.keySignature ? `, key ${track.keySignature}` : ""}`,
     data: {
       trackId: track.id,
       simplified,
@@ -324,7 +329,8 @@ function Canvas() {
   const graphNodes = useWorkspace((state) => state.nodes);
   const transitions = useWorkspace((state) => state.transitions);
   const activeSet = useWorkspace((state) => state.set);
-  const selection = useWorkspace((state) => state.selection);
+  const selectedTrackId = useWorkspace((state) => state.selectedTrackId);
+  const selectedTransitionId = useWorkspace((state) => state.selectedTransitionId);
   const multiSelectedTrackIds = useWorkspace((state) => state.multiSelectedTrackIds);
 
   const selectTrack = useWorkspace((state) => state.selectTrack);
@@ -360,7 +366,8 @@ function Canvas() {
         transitions,
         activeSet,
         activeSetTransitionIds,
-        selection,
+        selectedTrackId,
+        selectedTransitionId,
         multiSelectedTrackIds,
         simplified,
       }),
@@ -370,7 +377,8 @@ function Canvas() {
       transitions,
       activeSet,
       activeSetKey,
-      selection,
+      selectedTrackId,
+      selectedTransitionId,
       multiSelectedTrackIds,
       simplified,
     ],
@@ -423,7 +431,13 @@ function Canvas() {
    * effect that produced it.
    */
   const handleSelectionChange = useCallback<OnSelectionChangeFunc<CanvasNode, CanvasEdge>>(
-    ({ nodes: selected }) => {
+    ({ nodes: selected, edges: selectedEdges }) => {
+      const selectedEdge = selectedEdges[0];
+      if (selectedEdge !== undefined) {
+        selectTransition(selectedEdge.id);
+        return;
+      }
+
       const trackIds = selected.map((node) => node.data.trackId);
       // Two or more is what `multiSelectedTrackIds` exists for.
       if (trackIds.length > 1) {
@@ -449,7 +463,7 @@ function Canvas() {
       // used to leave the boxed node the one thing on screen *not* selected
       // while the previous selection lit back up. Promote it instead.
       const isAlreadyPrimary =
-        state.selection?.kind === "track" && state.selection.trackId === only;
+        state.selectedTrackId === only;
       if (isAlreadyPrimary) {
         // Re-selecting would write the same selection back and re-enter here.
         if (state.multiSelectedTrackIds.length > 0) setMultiSelection([]);
@@ -457,7 +471,7 @@ function Canvas() {
       }
       selectTrack(only);
     },
-    [setMultiSelection, selectTrack],
+    [setMultiSelection, selectTrack, selectTransition],
   );
 
   const handleToolChange = useCallback(
@@ -527,9 +541,8 @@ function Canvas() {
 
   /* Viewport ------------------------------------------------------------- */
 
-  const focusTrackId = selection?.kind === "track" ? selection.trackId : null;
   const focusNodeId =
-    graphNodes.find((node) => node.trackId === focusTrackId)?.id ?? null;
+    graphNodes.find((node) => node.trackId === selectedTrackId)?.id ?? null;
 
   const handleFitView = useCallback(() => {
     void fitView({ ...FIT_VIEW_OPTIONS, duration: 200 });
@@ -582,7 +595,10 @@ function Canvas() {
           selectTrack(node.data.trackId);
         }}
         // Edge ids are transition ids by construction in `project`.
-        onEdgeClick={(_event, edge) => selectTransition(edge.id)}
+        onEdgeClick={(event, edge) => {
+          event.stopPropagation();
+          selectTransition(edge.id);
+        }}
         onPaneClick={() => clearSelection()}
         fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
@@ -605,8 +621,8 @@ function Canvas() {
         <Background
           variant={BackgroundVariant.Dots}
           gap={22}
-          size={1}
-          color="var(--color-border)"
+          size={1.2}
+          color="var(--color-border-strong)"
         />
 
         {showMiniMap && (
