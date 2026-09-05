@@ -62,15 +62,18 @@
                       "nullable": true
                     },
                     "album": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "genre": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "durationSeconds": {
                       "type": "integer",
                       "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
+                      "maximum": 9007199254740991,
+                      "nullable": true
                     },
                     "source": {
                       "type": "string",
@@ -78,7 +81,8 @@
                         "local",
                         "streaming",
                         "missing"
-                      ]
+                      ],
+                      "nullable": true
                     },
                     "tags": {
                       "type": "array",
@@ -517,15 +521,18 @@
                             "nullable": true
                           },
                           "album": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "genre": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "durationSeconds": {
                             "type": "integer",
                             "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
+                            "maximum": 9007199254740991,
+                            "nullable": true
                           },
                           "source": {
                             "type": "string",
@@ -533,7 +540,8 @@
                               "local",
                               "streaming",
                               "missing"
-                            ]
+                            ],
+                            "nullable": true
                           },
                           "tags": {
                             "type": "array",
@@ -968,15 +976,18 @@
                       "nullable": true
                     },
                     "album": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "genre": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "durationSeconds": {
                       "type": "integer",
                       "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
+                      "maximum": 9007199254740991,
+                      "nullable": true
                     },
                     "source": {
                       "type": "string",
@@ -984,7 +995,8 @@
                         "local",
                         "streaming",
                         "missing"
-                      ]
+                      ],
+                      "nullable": true
                     },
                     "tags": {
                       "type": "array",
@@ -2179,15 +2191,18 @@
                                 "nullable": true
                               },
                               "album": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "genre": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "durationSeconds": {
                                 "type": "integer",
                                 "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
+                                "maximum": 9007199254740991,
+                                "nullable": true
                               },
                               "source": {
                                 "type": "string",
@@ -2195,7 +2210,8 @@
                                   "local",
                                   "streaming",
                                   "missing"
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "tags": {
                                 "type": "array",
@@ -2694,15 +2710,18 @@
                           "nullable": true
                         },
                         "album": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "genre": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "durationSeconds": {
                           "type": "integer",
                           "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "maximum": 9007199254740991,
+                          "nullable": true
                         },
                         "source": {
                           "type": "string",
@@ -2710,7 +2729,8 @@
                             "local",
                             "streaming",
                             "missing"
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "tags": {
                           "type": "array",
@@ -4820,15 +4840,18 @@
                                 "nullable": true
                               },
                               "album": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "genre": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "durationSeconds": {
                                 "type": "integer",
                                 "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
+                                "maximum": 9007199254740991,
+                                "nullable": true
                               },
                               "source": {
                                 "type": "string",
@@ -4836,7 +4859,8 @@
                                   "local",
                                   "streaming",
                                   "missing"
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "tags": {
                                 "type": "array",
@@ -5345,10 +5369,12 @@
                             "type": "string"
                           },
                           "targetBpm": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "targetKey": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "version": {
                             "type": "integer",
@@ -5608,10 +5634,12 @@
                       "type": "string"
                     },
                     "targetBpm": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "targetKey": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "version": {
                       "type": "integer",
@@ -5942,11 +5970,13 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 400,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "nullable": true
                   },
                   "targetKey": {
                     "type": "string",
-                    "pattern": "^(1[0-2]|[1-9])[AB]$"
+                    "pattern": "^(1[0-2]|[1-9])[AB]$",
+                    "nullable": true
                   }
                 },
                 "additionalProperties": false
@@ -6002,10 +6032,12 @@
                           "type": "string"
                         },
                         "targetBpm": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "targetKey": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "version": {
                           "type": "integer",
@@ -6051,7 +6083,8 @@
                             "type": "string"
                           },
                           "notes": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "track": {
                             "type": "object",
@@ -6090,24 +6123,30 @@
                                 "type": "string"
                               },
                               "bpm": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "keySignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "timeSignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "album": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "genre": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "durationSeconds": {
                                 "type": "integer",
                                 "minimum": -9007199254740991,
-                                "maximum": 9007199254740991
+                                "maximum": 9007199254740991,
+                                "nullable": true
                               },
                               "source": {
                                 "type": "string",
@@ -6115,7 +6154,8 @@
                                   "local",
                                   "streaming",
                                   "missing"
-                                ]
+                                ],
+                                "nullable": true
                               },
                               "tags": {
                                 "type": "array",
@@ -6489,10 +6529,12 @@
                       "type": "string"
                     },
                     "targetBpm": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "targetKey": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "version": {
                       "type": "integer",
@@ -6925,11 +6967,13 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 400,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "nullable": true
                   },
                   "targetKey": {
                     "type": "string",
-                    "pattern": "^(1[0-2]|[1-9])[AB]$"
+                    "pattern": "^(1[0-2]|[1-9])[AB]$",
+                    "nullable": true
                   }
                 },
                 "additionalProperties": false
@@ -7285,7 +7329,8 @@
                       "type": "string"
                     },
                     "notes": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "track": {
                       "type": "object",
@@ -7324,24 +7369,30 @@
                           "type": "string"
                         },
                         "bpm": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "keySignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "timeSignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "album": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "genre": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "durationSeconds": {
                           "type": "integer",
                           "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "maximum": 9007199254740991,
+                          "nullable": true
                         },
                         "source": {
                           "type": "string",
@@ -7349,7 +7400,8 @@
                             "local",
                             "streaming",
                             "missing"
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "tags": {
                           "type": "array",
@@ -7843,7 +7895,8 @@
                       "type": "string"
                     },
                     "notes": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "track": {
                       "type": "object",
@@ -7882,24 +7935,30 @@
                           "type": "string"
                         },
                         "bpm": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "keySignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "timeSignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "album": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "genre": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "durationSeconds": {
                           "type": "integer",
                           "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "maximum": 9007199254740991,
+                          "nullable": true
                         },
                         "source": {
                           "type": "string",
@@ -7907,7 +7966,8 @@
                             "local",
                             "streaming",
                             "missing"
-                          ]
+                          ],
+                          "nullable": true
                         },
                         "tags": {
                           "type": "array",
@@ -9016,7 +9076,8 @@
                             "maximum": 9007199254740991
                           },
                           "error": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "startedAt": {
                             "type": "string",
@@ -9026,7 +9087,8 @@
                           "finishedAt": {
                             "type": "string",
                             "format": "date-time",
-                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                            "nullable": true
                           }
                         },
                         "additionalProperties": false
@@ -9314,7 +9376,8 @@
                       "maximum": 9007199254740991
                     },
                     "error": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "startedAt": {
                       "type": "string",
@@ -9324,7 +9387,8 @@
                     "finishedAt": {
                       "type": "string",
                       "format": "date-time",
-                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "nullable": true
                     }
                   },
                   "additionalProperties": false

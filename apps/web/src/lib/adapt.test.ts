@@ -90,9 +90,14 @@ describe("adaptTrack", () => {
   });
 
   it("carries the metadata the Serato import supplies", () => {
-    const track = adaptTrack(
-      asWire({ ...trackDto, album: "Nobody Is Not Loved", genre: "Melodic House", durationSeconds: 508, source: "local" }),
-    );
+    const imported: TrackDto = {
+      ...trackDto,
+      album: "Nobody Is Not Loved",
+      genre: "Melodic House",
+      durationSeconds: 508,
+      source: "local",
+    };
+    const track = adaptTrack(imported);
 
     expect(track.album).toBe("Nobody Is Not Loved");
     expect(track.genre).toBe("Melodic House");
@@ -103,7 +108,9 @@ describe("adaptTrack", () => {
   it("passes a streaming track's state through as streaming, not missing", () => {
     // Most of a real Serato library is streaming (ADR-0010). Rendering those
     // as missing files would put a warning on five tracks in six.
-    expect(adaptTrack(asWire({ ...trackDto, source: "streaming" })).source).toBe("streaming");
+    const streaming: TrackDto = { ...trackDto, source: "streaming" };
+
+    expect(adaptTrack(streaming).source).toBe("streaming");
   });
 
   it("gives two adapted tracks the same absences, not id-derived variety", () => {
