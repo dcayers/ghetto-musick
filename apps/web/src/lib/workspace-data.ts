@@ -1,15 +1,21 @@
 /**
- * The demo workspace snapshot.
+ * The workspace data vocabulary, and a demo snapshot that speaks it.
  *
- * Static, but shaped exactly like the persisted domain (§19): a `DemoTrack` is
- * the API's `TrackDto` plus the fields whose endpoints do not exist yet, and
- * `DemoTransition` carries the same `technique`/`confidence` attributes
- * `@flowgraph/domain`'s `TransitionAttributes` does. Swapping this for live
- * data is a change of source, not of shape.
+ * Two sources produce these shapes: `lib/adapt.ts` maps live API responses
+ * into them, and the snapshot at the bottom of this file supplies a populated
+ * workspace for design work and for an account that has no tracks yet.
  *
- * Everything is deterministic — derived from a track id — so a track looks the
- * same across the library, the canvas, the timeline, and the inspector, and
- * across reloads.
+ * Fields the API does not store are `null` rather than invented. The `Track`
+ * table holds title, artist, bpm, key, and tags; it has no energy, genre,
+ * year, duration, or file-availability column. Deriving plausible-looking
+ * values for those from a track id would be worse than leaving them empty —
+ * on a real library they would read as facts about the user's own music. The
+ * primitives already render `null` as an em dash or an unfilled control, so
+ * absence has a visual form.
+ *
+ * Everything the snapshot generates is deterministic — derived from a track id
+ * — so a demo track looks the same across the library, the canvas, the
+ * timeline, and the inspector, and across reloads.
  */
 
 import type { ScorableTrack, TransitionInput } from "@flowgraph/domain";
@@ -39,14 +45,14 @@ export interface Stem {
   readonly available: boolean;
 }
 
-export interface DemoTrack extends ScorableTrack {
+export interface WorkspaceTrack extends ScorableTrack {
   readonly id: string;
   readonly title: string;
   readonly artist: string;
   readonly bpm: number | null;
   readonly keySignature: string | null;
   /**
-   * 1–5, matching the dot scale the whole UI renders.
+   * 1–5, matching the dot scale the whole UI renders, or null when unknown.
    *
    * `ScorableTrack.energy` documents 1–10, and this narrowing is deliberate:
    * every energy affordance in the app is a five-dot control, so widening the
@@ -54,15 +60,20 @@ export interface DemoTrack extends ScorableTrack {
    * the energy component by `|delta| / 5`, so a 1–5 scale bottoms out at 0.2
    * instead of 0 — the component's usable range is compressed, not wrong, and
    * it carries only 0.1 of the weighted mean either way.
+   *
+   * Null for a live track: there is no energy column yet, and the domain
+   * already types it `number | null | undefined`, so an unscored track simply
+   * drops that component from the weighted mean.
    */
-  readonly energy: number;
-  readonly genre: string;
-  readonly year: number;
-  readonly durationSeconds: number;
-  readonly rating: number;
+  readonly energy: number | null;
+  readonly genre: string | null;
+  readonly year: number | null;
+  readonly durationSeconds: number | null;
+  readonly rating: number | null;
   readonly comment: string;
   readonly tags: readonly string[];
-  readonly source: TrackSource;
+  /** Null when the workspace has no file record for the track at all. */
+  readonly source: TrackSource | null;
   readonly hasStems: boolean;
   /** Per-field origin, so the inspector can show why a value is what it is. */
   readonly provenance: Readonly<Record<string, Provenance>>;
@@ -116,14 +127,24 @@ export function techniqueSpec(id: string): TechniqueSpec {
   return TECHNIQUES[id] ?? { id, label: id, family: "blend", dash: null };
 }
 
-export interface DemoTransition extends TransitionInput {
+export interface WorkspaceTransition extends TransitionInput {
   readonly id: string;
   readonly sourceTrackId: string;
   readonly targetTrackId: string;
   readonly technique: string;
-  readonly confidence: number;
-  /** Mix length, in bars — the unit DJs actually plan in. */
-  readonly bars: number;
+  /**
+   * The deterministic score for this pairing, 0–1, or null when none is
+   * stored. Live transitions carry the API's `score`, which is null until a
+   * scoring pass has run over the pair.
+   */
+  readonly confidence: number | null;
+  /**
+   * Mix length, in bars — the unit DJs actually plan in.
+   *
+   * Null on a live transition: the API models technique, notes, and tags, but
+   * has no bar-length column, so there is nothing to read one from yet.
+   */
+  readonly bars: number | null;
   readonly mixOutCueId: string | null;
   readonly mixInCueId: string | null;
   readonly notes: string;
@@ -133,14 +154,14 @@ export interface DemoTransition extends TransitionInput {
   readonly fx: readonly string[];
 }
 
-export interface DemoGraphNode {
+export interface WorkspaceGraphNode {
   readonly id: string;
   readonly trackId: string;
   readonly x: number;
   readonly y: number;
 }
 
-export interface DemoSet {
+export interface WorkspaceSet {
   readonly id: string;
   readonly name: string;
   /** Ordered. Adjacent pairs are looked up against `transitions`. */
@@ -200,7 +221,8 @@ export function waveformPeaks(trackId: string, samples = 64): number[] {
   });
 }
 
-export function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "—";
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -214,12 +236,17 @@ export function formatDuration(seconds: number): string {
 const CUE_COLORS = ["#34d399", "#fbbf24", "#fb7185", "#22d3ee", "#a78bfa"] as const;
 const CUE_LABELS = ["Intro", "Breakdown", "Drop", "Outro"] as const;
 
-export function hotCuesFor(track: DemoTrack): HotCue[] {
+export function hotCuesFor(track: WorkspaceTrack): HotCue[] {
+  // Cue positions are fractions of the running time. Without a duration
+  // there is nothing to take a fraction of, so the honest answer is none
+  // rather than four cues at second zero.
+  if (track.durationSeconds === null) return [];
+  const duration = track.durationSeconds;
   const random = rng(hash(`${track.id}-cues`));
   return CUE_LABELS.map((label, index) => ({
     id: `${track.id}-cue-${index}`,
     index: index + 1,
-    seconds: Math.round(track.durationSeconds * (0.06 + index * 0.27 + random() * 0.03)),
+    seconds: Math.round(duration * (0.06 + index * 0.27 + random() * 0.03)),
     label,
     color: CUE_COLORS[index % CUE_COLORS.length]!,
     // A mixture, so the inspector's imported/suggested/approved distinction
@@ -228,7 +255,7 @@ export function hotCuesFor(track: DemoTrack): HotCue[] {
   }));
 }
 
-export function stemsFor(track: DemoTrack): Stem[] {
+export function stemsFor(track: WorkspaceTrack): Stem[] {
   const random = rng(hash(`${track.id}-stems`));
   return ["Vocal", "Drums", "Bass", "Melody"].map((name) => ({
     name,
@@ -435,7 +462,7 @@ const GENRES = [
 /** §5 shows "126 tracks"; the eight featured plus generated filler. */
 const TOTAL_TRACKS = 126;
 
-function buildTrack(seed: Seed): DemoTrack {
+function buildTrack(seed: Seed): WorkspaceTrack {
   return {
     id: seed.id,
     title: seed.title,
@@ -466,7 +493,7 @@ function buildTrack(seed: Seed): DemoTrack {
   };
 }
 
-function buildFiller(index: number): DemoTrack {
+function buildFiller(index: number): WorkspaceTrack {
   const id = `trk-fill-${index}`;
   const random = rng(hash(id));
   const bpm = 118 + Math.floor(random() * 12);
@@ -500,16 +527,10 @@ function buildFiller(index: number): DemoTrack {
   };
 }
 
-export const TRACKS: readonly DemoTrack[] = [
+export const TRACKS: readonly WorkspaceTrack[] = [
   ...FEATURED.map(buildTrack),
   ...Array.from({ length: TOTAL_TRACKS - FEATURED.length }, (_, index) => buildFiller(index)),
 ];
-
-const BY_ID = new Map(TRACKS.map((track) => [track.id, track]));
-
-export function trackById(id: string | null | undefined): DemoTrack | null {
-  return id ? (BY_ID.get(id) ?? null) : null;
-}
 
 /**
  * Node positions.
@@ -519,7 +540,7 @@ export function trackById(id: string | null | undefined): DemoTrack | null {
  * the evenly-distributed diagram it warns against. The main path runs left to
  * right along the middle; the two branches bow above and below it.
  */
-export const NODES: readonly DemoGraphNode[] = [
+export const NODES: readonly WorkspaceGraphNode[] = [
   { id: "node-awake", trackId: "trk-awake", x: 0, y: 120 },
   { id: "node-afterglow", trackId: "trk-afterglow", x: 230, y: 0 },
   { id: "node-the-less-i-know", trackId: "trk-the-less-i-know", x: 120, y: 350 },
@@ -544,7 +565,7 @@ export const NODES: readonly DemoGraphNode[] = [
  * live from the tracks, so authored metadata that disagrees with the domain
  * shows up on screen as the transition contradicting itself.
  */
-export const TRANSITIONS: readonly DemoTransition[] = [
+export const TRANSITIONS: readonly WorkspaceTransition[] = [
   {
     id: "tx-awake-afterglow",
     sourceTrackId: "trk-awake",
@@ -696,7 +717,7 @@ export const TRANSITIONS: readonly DemoTransition[] = [
 ];
 
 /** The active set — six tracks, §4 and §12. */
-export const ACTIVE_SET: DemoSet = {
+export const ACTIVE_SET: WorkspaceSet = {
   id: "set-sunset-rooftop",
   name: "Sunset Rooftop Set",
   trackIds: [
@@ -715,8 +736,8 @@ export const ACTIVE_SET: DemoSet = {
 
 /** Transition ids that lie on the active set path, in set order. */
 export function activeSetTransitionIds(
-  set: DemoSet,
-  transitions: readonly DemoTransition[],
+  set: WorkspaceSet,
+  transitions: readonly WorkspaceTransition[],
 ): string[] {
   const ids: string[] = [];
   for (let i = 0; i < set.trackIds.length - 1; i += 1) {
@@ -737,10 +758,10 @@ export function activeSetTransitionIds(
  * reordered set can put two tracks side by side that were never linked.
  */
 export function transitionBetween(
-  transitions: readonly DemoTransition[],
+  transitions: readonly WorkspaceTransition[],
   fromTrackId: string,
   toTrackId: string,
-): DemoTransition | null {
+): WorkspaceTransition | null {
   return (
     transitions.find(
       (tx) => tx.sourceTrackId === fromTrackId && tx.targetTrackId === toTrackId,
@@ -750,9 +771,9 @@ export function transitionBetween(
 
 /** Total runtime of the set, minus overlap from each authored mix. */
 export function setDuration(
-  set: DemoSet,
-  tracks: readonly DemoTrack[],
-  transitions: readonly DemoTransition[],
+  set: WorkspaceSet,
+  tracks: readonly WorkspaceTrack[],
+  transitions: readonly WorkspaceTransition[],
 ): number {
   const byId = new Map(tracks.map((track) => [track.id, track]));
   let total = 0;
@@ -762,20 +783,23 @@ export function setDuration(
   // BPM a bar is ~1.94s; close enough for a planning estimate.
   for (const id of activeSetTransitionIds(set, transitions)) {
     const tx = transitions.find((entry) => entry.id === id);
-    if (tx) total -= tx.bars * 1.94;
+    if (tx?.bars != null) total -= tx.bars * 1.94;
   }
   return Math.max(0, Math.round(total));
 }
 
-/** BPM delta across a transition, in whole BPM. */
+/**
+ * BPM delta across a transition, in whole BPM.
+ *
+ * Takes the two tracks rather than a transition id and an index to resolve it
+ * against. It previously did the lookup itself, through a module-level map of
+ * the demo snapshot — which meant it silently answered for the wrong workspace
+ * as soon as one held live tracks. Every caller already has both endpoints.
+ */
 export function bpmDelta(
-  transitions: readonly DemoTransition[],
-  transitionId: string,
+  from: WorkspaceTrack,
+  to: WorkspaceTrack,
 ): number | null {
-  const tx = transitions.find((entry) => entry.id === transitionId);
-  if (!tx) return null;
-  const from = trackById(tx.sourceTrackId);
-  const to = trackById(tx.targetTrackId);
-  if (from?.bpm == null || to?.bpm == null) return null;
+  if (from.bpm == null || to.bpm == null) return null;
   return Math.round((to.bpm - from.bpm) * 10) / 10;
 }

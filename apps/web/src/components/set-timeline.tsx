@@ -34,9 +34,9 @@ import {
   setDuration,
   techniqueSpec,
   transitionBetween,
-  type DemoTrack,
-  type DemoTransition,
-} from "../lib/demo-data.js";
+  type WorkspaceTrack,
+  type WorkspaceTransition,
+} from "../lib/workspace-data.js";
 import { PANEL_LIMITS, useWorkspace, type OverlayMetric } from "../state/workspace.js";
 
 /**
@@ -109,13 +109,13 @@ function camelotNumber(key: string | null): number | null {
   return position >= 1 && position <= 12 ? position : null;
 }
 
-function metricValue(track: DemoTrack, metric: OverlayMetric): number | null {
+function metricValue(track: WorkspaceTrack, metric: OverlayMetric): number | null {
   if (metric === "bpm") return track.bpm;
   if (metric === "key") return camelotNumber(track.keySignature);
   return track.energy;
 }
 
-function metricText(track: DemoTrack, metric: OverlayMetric): string {
+function metricText(track: WorkspaceTrack, metric: OverlayMetric): string {
   if (metric === "bpm") return track.bpm === null ? "BPM unknown" : `${track.bpm.toFixed(0)} BPM`;
   if (metric === "key") {
     return camelotNumber(track.keySignature) === null
@@ -160,7 +160,7 @@ function axisLabels(
 /** A set entry that resolved to a real track, carrying its true set index. */
 interface Slot {
   readonly index: number;
-  readonly track: DemoTrack;
+  readonly track: WorkspaceTrack;
 }
 
 export function SetTimeline() {
@@ -440,7 +440,7 @@ function TrackSlotWithLink({
   isSelected: boolean;
   isDropTarget: boolean;
   isDragging: boolean;
-  transition: DemoTransition | null;
+  transition: WorkspaceTransition | null;
   selectedTransitionId: string | null;
   onSelectTrack: (trackId: string) => void;
   onSelectTransition: (transitionId: string) => void;
@@ -581,7 +581,7 @@ function TransitionBlock({
   isSelected,
   onPress,
 }: {
-  transition: DemoTransition;
+  transition: WorkspaceTransition;
   fromTitle: string;
   toTitle: string;
   isSelected: boolean;

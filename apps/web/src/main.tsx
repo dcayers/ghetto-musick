@@ -1,10 +1,18 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import "@xyflow/react/dist/style.css";
 import "./styles/theme.css";
 
-import { listTracks, isUnauthenticated } from "./lib/api.js";
+import { listTracks, listAllTracks, isUnauthenticated } from "./lib/api.js";
+import { createGraph, getGraph, listGraphs } from "./lib/graph-api.js";
+import { adaptGraph, adaptTrack } from "./lib/adapt.js";
 import { SignIn } from "./components/sign-in.js";
 import { WorkspaceLayout } from "./components/workspace-layout.js";
 import { TopNav } from "./components/top-nav.js";
@@ -65,19 +73,157 @@ function App() {
   return <Workspace />;
 }
 
+const ACTION_CLASS =
+  "bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60";
+const QUIET_ACTION_CLASS =
+  "border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-md border px-3 py-1.5 text-xs font-medium";
+
 /**
- * The signed-in workspace.
+ * Chooses the workspace's data source.
  *
- * The graph, library, timeline, and inspector all render the demo snapshot in
- * `lib/demo-data.ts` rather than the dev database. That is deliberate: the
- * showcase state this screen has to demonstrate — Innerbloom preselected, two
- * branch points with rejoins, a six-track set with a complete energy curve —
- * is not what the dev database contains, and a workspace that opens half-empty
- * cannot show the workflow it exists to show. The snapshot uses the same
- * domain shapes the API returns, so swapping the source is a change of
- * provider, not a rewrite.
+ * A workspace with a graph opens on it, live. A brand-new one has nothing to
+ * open, so it is offered the two honest starting points: create a graph, or
+ * look at the demo snapshot. The snapshot is never shown as though it were the
+ * user's own data — taking it is a decision made here, on a screen that says
+ * what it is.
  */
 function Workspace() {
+  const [useDemo, setUseDemo] = useState(false);
+  const queryClient = useQueryClient();
+
+  const graphs = useQuery({ queryKey: ["graphs"], queryFn: listGraphs });
+
+  const create = useMutation({
+    mutationFn: () => createGraph("Untitled graph"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["graphs"] }),
+  });
+
+  if (useDemo) return <WorkspaceShell />;
+
+  if (graphs.isPending) {
+    return (
+      <div className="grid h-screen place-items-center">
+        <EmptyState title="Loading workspace…" />
+      </div>
+    );
+  }
+
+  if (graphs.isError) {
+    return (
+      <div className="grid h-screen place-items-center">
+        <EmptyState
+          title="Could not load your graphs."
+          hint={graphs.error instanceof Error ? graphs.error.message : undefined}
+          actions={
+            <button type="button" className={ACTION_CLASS} onClick={() => void graphs.refetch()}>
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const first = graphs.data[0];
+  if (first === undefined) {
+    return (
+      <div className="grid h-screen place-items-center">
+        <EmptyState
+          title="This workspace has no graphs yet."
+          hint="Create one to start planning, or open the demo to see a populated workspace. The demo is a fixed snapshot — nothing in it is saved."
+          actions={
+            <>
+              <button
+                type="button"
+                className={ACTION_CLASS}
+                disabled={create.isPending}
+                onClick={() => create.mutate()}
+              >
+                {create.isPending ? "Creating…" : "Create a graph"}
+              </button>
+              <button
+                type="button"
+                className={QUIET_ACTION_CLASS}
+                onClick={() => setUseDemo(true)}
+              >
+                Open the demo
+              </button>
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
+  return <LiveWorkspace graphId={first.id} />;
+}
+
+/**
+ * Loads one graph and the track library, then hands both to the store.
+ *
+ * The shell is not rendered until the store actually holds live data. It would
+ * otherwise mount against the demo snapshot for a frame and then swap, which
+ * reads as the user's workspace briefly containing someone else's tracks.
+ */
+function LiveWorkspace({ graphId }: { graphId: string }) {
+  const hydrateLive = useWorkspace((state) => state.hydrateLive);
+  const source = useWorkspace((state) => state.source);
+  const announce = useWorkspace((state) => state.announce);
+
+  const graph = useQuery({ queryKey: ["graph", graphId], queryFn: () => getGraph(graphId) });
+  const tracks = useQuery({ queryKey: ["tracks", "all"], queryFn: listAllTracks });
+
+  const graphData = graph.data;
+  const trackData = tracks.data;
+
+  useEffect(() => {
+    if (!graphData || !trackData) return;
+    hydrateLive({
+      graph: adaptGraph(graphData),
+      tracks: trackData.items.map(adaptTrack),
+    });
+    if (trackData.truncated) {
+      announce("Showing the first 2000 tracks — the library is longer than this view loads.");
+    }
+  }, [graphData, trackData, hydrateLive, announce]);
+
+  const error = graph.error ?? tracks.error;
+  if (error) {
+    return (
+      <div className="grid h-screen place-items-center">
+        <EmptyState
+          title="Could not load the graph."
+          hint={error instanceof Error ? error.message : undefined}
+          actions={
+            <button
+              type="button"
+              className={ACTION_CLASS}
+              onClick={() => {
+                void graph.refetch();
+                void tracks.refetch();
+              }}
+            >
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (source !== "live") {
+    return (
+      <div className="grid h-screen place-items-center">
+        <EmptyState title="Loading workspace…" />
+      </div>
+    );
+  }
+
+  return <WorkspaceShell />;
+}
+
+/** The four surfaces, over whichever source the store currently holds. */
+function WorkspaceShell() {
   const view = useWorkspace((state) => state.view);
 
   return (

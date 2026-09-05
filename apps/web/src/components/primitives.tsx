@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { waveformPeaks, type TrackSource } from "../lib/demo-data.js";
+import { waveformPeaks, type TrackSource } from "../lib/workspace-data.js";
 
 /**
  * Shared display primitives.
@@ -228,14 +228,14 @@ export function Artwork({
 export function Waveform({
   trackId,
   bars = 32,
-  energy: _energy = 3,
+  energy: _energy = null,
   className,
   color,
   muted = false,
 }: {
   trackId: string;
   bars?: number;
-  energy?: number;
+  energy?: number | null;
   className?: string;
   color?: string;
   muted?: boolean;
@@ -281,7 +281,10 @@ const SOURCE_LABEL: Record<TrackSource, string> = {
  * Shape carries the meaning, not just colour (§17): a filled disc is local, a
  * ring is streaming, a slashed ring is missing.
  */
-export function SourceDot({ source }: { source: TrackSource }) {
+export function SourceDot({ source }: { source: TrackSource | null }) {
+  // Null is "no file record", which is not one of the three states — the
+  // honest mark for it is no mark.
+  if (source === null) return null;
   return (
     <span
       role="img"

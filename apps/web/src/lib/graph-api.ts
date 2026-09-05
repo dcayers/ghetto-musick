@@ -1,52 +1,62 @@
+import type { paths } from "@flowgraph/api-client";
+
 import { api, ApiError } from "./api.js";
 
 /**
  * Graph endpoints, through the generated client.
  *
- * Types are derived from `openapi.json`; nothing here restates a wire shape.
+ * Every type below is projected out of `paths`, which `openapi-typescript`
+ * derives from `openapi.json`. The document inlines its schemas rather than
+ * using `$ref` components, so `components["schemas"]` is `never` and the
+ * projection has to walk the path — verbose, but it is still one source of
+ * truth. An earlier version of this file restated the shapes by hand and
+ * bridged the difference with `as unknown as`, which meant the casts silently
+ * absorbed every contract change instead of failing on it.
  */
 
-export interface GraphSummary {
-  id: string;
-  name: string;
-  version: number;
+type Json200<P extends keyof paths, M extends "get"> = paths[P][M] extends {
+  responses: { 200: { content: { "application/json": infer T } } };
+}
+  ? T
+  : never;
+
+export type GraphSummary = Json200<"/v1/graphs", "get">["items"][number];
+export type GraphDetail = Json200<"/v1/graphs/{graphId}", "get">;
+export type GraphNodeDto = GraphDetail["nodes"][number];
+export type TransitionDto = GraphDetail["transitions"][number];
+export type TrackDto = GraphNodeDto["track"];
+export type Suggestion = Json200<"/v1/transitions/suggestions", "get">["items"][number];
+
+/**
+ * The closed technique vocabulary, straight from the contract.
+ *
+ * Exported because the UI's own technique table has to stay a subset of it:
+ * a technique the canvas can draw but the API rejects is precisely the split
+ * the closed set exists to prevent.
+ */
+export type TransitionTechnique = NonNullable<
+  paths["/v1/transitions"]["post"]["requestBody"]
+>["content"]["application/json"]["technique"];
+
+/** A node position in a layout batch. */
+export interface NodePosition {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
 }
 
-export interface GraphNodeDto {
-  id: string;
-  trackId: string;
-  x: number;
-  y: number;
-  track: {
-    id: string;
-    title: string;
-    artist: string;
-    bpm: number | null;
-    keySignature: string | null;
-  };
-}
-
-export interface TransitionDto {
-  id: string;
-  fromTrackId: string;
-  toTrackId: string;
-  technique: string;
-  tags: string[];
-  score: number | null;
-}
-
-export interface GraphDetail {
-  graph: GraphSummary;
-  nodes: GraphNodeDto[];
-  transitions: TransitionDto[];
-}
-
-export interface Suggestion {
-  track: { id: string; title: string; artist: string; bpm: number | null; keySignature: string | null };
-  score: number;
-  harmonicRelation: string | null;
-  pitchAdjustment: number | null;
-  warnings: string[];
+/**
+ * Raised when the graph moved underneath us.
+ *
+ * Distinct from a generic `ApiError` because the caller's response is
+ * different in kind: a 409 is not a failure to retry but a signal to reload
+ * and re-apply, which is what plan §10.1 asks for.
+ */
+export class GraphConflictError extends ApiError {
+  constructor(message = "The graph changed in another window.") {
+    super(message, 409);
+    this.name = "GraphConflictError";
+  }
 }
 
 function fail(status: number, fallback: string, error: unknown): never {
@@ -54,19 +64,20 @@ function fail(status: number, fallback: string, error: unknown): never {
     typeof error === "object" && error && "message" in error
       ? String((error as { message: unknown }).message)
       : fallback;
+  if (status === 409) throw new GraphConflictError(message);
   throw new ApiError(message, status);
 }
 
 export async function listGraphs(): Promise<GraphSummary[]> {
   const { data, error, response } = await api.GET("/v1/graphs", {});
   if (error || !data) fail(response.status, "Failed to load graphs", error);
-  return data.items as GraphSummary[];
+  return data.items;
 }
 
 export async function createGraph(name: string): Promise<GraphSummary> {
   const { data, error, response } = await api.POST("/v1/graphs", { body: { name } });
   if (error || !data) fail(response.status, "Failed to create graph", error);
-  return data as GraphSummary;
+  return data;
 }
 
 export async function getGraph(graphId: string): Promise<GraphDetail> {
@@ -74,7 +85,7 @@ export async function getGraph(graphId: string): Promise<GraphDetail> {
     params: { path: { graphId } },
   });
   if (error || !data) fail(response.status, "Failed to load graph", error);
-  return data as unknown as GraphDetail;
+  return data;
 }
 
 export async function addNode(
@@ -86,7 +97,7 @@ export async function addNode(
     body: input,
   });
   if (error || !data) fail(response.status, "Failed to place track", error);
-  return data as unknown as GraphNodeDto;
+  return data;
 }
 
 export async function removeNode(graphId: string, nodeId: string): Promise<void> {
@@ -100,37 +111,42 @@ export async function removeNode(graphId: string, nodeId: string): Promise<void>
  * Persists a batch of positions.
  *
  * Returns the new version so the caller can keep its optimistic-concurrency
- * token current. A 409 means someone else moved things — the caller reloads
- * rather than clobbering (plan §10.1).
+ * token current. A 409 arrives as `GraphConflictError` — someone else moved
+ * things, and the caller reloads rather than clobbering (plan §10.1).
  */
 export async function saveLayout(
   graphId: string,
   expectedVersion: number,
-  positions: Array<{ id: string; x: number; y: number }>,
+  positions: readonly NodePosition[],
 ): Promise<number> {
   const { data, error, response } = await api.PATCH("/v1/graphs/{graphId}/layout", {
     params: { path: { graphId } },
-    body: { expectedVersion, positions },
+    body: { expectedVersion, positions: [...positions] },
   });
   if (error || !data) fail(response.status, "Failed to save layout", error);
-  return (data as unknown as GraphSummary).version;
+  return data.version;
 }
 
 export async function createTransition(input: {
   fromTrackId: string;
   toTrackId: string;
-  technique?: string;
+  technique?: TransitionTechnique;
+  notes?: string;
 }): Promise<TransitionDto> {
   const { data, error, response } = await api.POST("/v1/transitions", {
     body: {
       fromTrackId: input.fromTrackId,
       toTrackId: input.toTrackId,
-      ...(input.technique ? { technique: input.technique } : {}),
+      // Required by the generated body type even though Zod defaults it —
+      // `.default()` makes the field required on the *output* side, which is
+      // what the document describes.
+      technique: input.technique ?? "blend",
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
       tags: [],
-    } as never,
+    },
   });
   if (error || !data) fail(response.status, "Failed to create transition", error);
-  return data as unknown as TransitionDto;
+  return data;
 }
 
 export async function deleteTransition(transitionId: string): Promise<void> {
@@ -148,5 +164,5 @@ export async function suggestTransitions(
     params: { query: { fromTrackId, limit } },
   });
   if (error || !data) fail(response.status, "Failed to load suggestions", error);
-  return data.items as unknown as Suggestion[];
+  return data.items;
 }

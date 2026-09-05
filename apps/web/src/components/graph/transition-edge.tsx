@@ -8,8 +8,8 @@ import {
 } from "@xyflow/react";
 import { Button } from "react-aria-components";
 import { AlertTriangle, Sparkles } from "lucide-react";
-import { TECHNIQUE_COLOR, techniqueSpec, trackById } from "../../lib/demo-data.js";
-import { useWorkspace } from "../../state/workspace.js";
+import { TECHNIQUE_COLOR, techniqueSpec } from "../../lib/workspace-data.js";
+import { useTrackById, useWorkspace } from "../../state/workspace.js";
 import { cx } from "../primitives.js";
 
 /**
@@ -103,8 +103,8 @@ export const TransitionEdge = memo(function TransitionEdge({
   const markerId = `fg-arrow-${spec.family}-${weight}`;
   const markerSize = MARKER_SIZE[weight];
 
-  const from = trackById(transition?.sourceTrackId);
-  const to = trackById(transition?.targetTrackId);
+  const from = useTrackById(transition?.sourceTrackId);
+  const to = useTrackById(transition?.targetTrackId);
   const endpoints = from && to ? ` from ${from.title} to ${to.title}` : "";
   const length = transition ? `, ${transition.bars} bars` : "";
   const ariaLabel =

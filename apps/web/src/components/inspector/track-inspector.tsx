@@ -19,10 +19,10 @@ import {
   hotCuesFor,
   stemsFor,
   type CueStatus,
-  type DemoTrack,
+  type WorkspaceTrack,
   type Provenance,
   type TrackSource,
-} from "../../lib/demo-data.js";
+} from "../../lib/workspace-data.js";
 import { useWorkspace } from "../../state/workspace.js";
 
 /**
@@ -117,7 +117,7 @@ function ProvenanceMark({ source }: { source: Provenance | undefined }) {
 
 /* ------------------------------------------------------------------ shell -- */
 
-export function TrackInspector({ track }: { track: DemoTrack }): JSX.Element {
+export function TrackInspector({ track }: { track: WorkspaceTrack }): JSX.Element {
   // Every editable block below is local state seeded from the track, so the
   // body is keyed by id. Remounting is cheaper and far less error-prone than
   // syncing seven pieces of state in an effect on every selection change —
@@ -147,13 +147,13 @@ interface StemRow {
 }
 
 interface SuggestionRow {
-  track: DemoTrack;
+  track: WorkspaceTrack;
   score: TransitionScore;
 }
 
 const COLLAPSED_SUGGESTIONS = 5;
 
-function InspectorBody({ track }: { track: DemoTrack }) {
+function InspectorBody({ track }: { track: WorkspaceTrack }) {
   const tracks = useWorkspace((state) => state.tracks);
   const announce = useWorkspace((state) => state.announce);
 
@@ -274,7 +274,7 @@ function InspectorBody({ track }: { track: DemoTrack }) {
             <CamelotKey value={track.keySignature} />
             <span className="text-ink-subtle flex items-center gap-1 text-[10px]">
               <SourceDot source={track.source} />
-              {SOURCE_SHORT[track.source]}
+              {track.source === null ? "No file record" : SOURCE_SHORT[track.source]}
             </span>
           </div>
         </div>

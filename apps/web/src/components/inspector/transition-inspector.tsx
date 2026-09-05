@@ -26,13 +26,12 @@ import {
   formatDuration,
   hotCuesFor,
   techniqueSpec,
-  trackById,
-  type DemoTrack,
-  type DemoTransition,
+  type WorkspaceTrack,
+  type WorkspaceTransition,
   type HotCue,
   type TechniqueSpec,
-} from "../../lib/demo-data.js";
-import { useWorkspace } from "../../state/workspace.js";
+} from "../../lib/workspace-data.js";
+import { useTrackById, useWorkspace } from "../../state/workspace.js";
 
 /**
  * Transition inspector — §10.
@@ -64,6 +63,15 @@ const RELATION_TONE: Readonly<Record<HarmonicRelation, "ok" | "warn" | "danger">
 
 const MIN_BARS = 1;
 const MAX_BARS = 128;
+/**
+ * React Aria renders `NaN` as an empty number field.
+ *
+ * An unset bar length has to look unset. Seeding the control with a
+ * plausible 16 made the row read "16 bars" for a transition the API stores
+ * no length for at all — the same invented-metadata problem the track
+ * fields avoid, just in an input instead of a cell.
+ */
+const NO_BARS = Number.NaN;
 
 /** A 4/4 bar at `bpm`. Every mix length in the UI is derived from this. */
 function barSeconds(bpm: number): number {
@@ -82,9 +90,9 @@ function scoreTone(value: number): string {
   return "text-danger";
 }
 
-export function TransitionInspector({ transition }: { transition: DemoTransition }): JSX.Element {
-  const from = trackById(transition.sourceTrackId);
-  const to = trackById(transition.targetTrackId);
+export function TransitionInspector({ transition }: { transition: WorkspaceTransition }): JSX.Element {
+  const from = useTrackById(transition.sourceTrackId);
+  const to = useTrackById(transition.targetTrackId);
 
   if (from === null || to === null) {
     return (
@@ -109,11 +117,10 @@ function TransitionBody({
   from,
   to,
 }: {
-  transition: DemoTransition;
-  from: DemoTrack;
-  to: DemoTrack;
+  transition: WorkspaceTransition;
+  from: WorkspaceTrack;
+  to: WorkspaceTrack;
 }) {
-  const transitions = useWorkspace((state) => state.transitions);
   const updateTransition = useWorkspace((state) => state.updateTransition);
   const removeTransition = useWorkspace((state) => state.removeTransition);
   const announce = useWorkspace((state) => state.announce);
@@ -127,14 +134,20 @@ function TransitionBody({
   const outCue = hotCuesFor(from).find((cue) => cue.id === transition.mixOutCueId) ?? null;
   const inCue = hotCuesFor(to).find((cue) => cue.id === transition.mixInCueId) ?? null;
 
-  const delta = bpmDelta(transitions, transition.id);
+  const delta = bpmDelta(from, to);
   const fromKey = parseKey(from.keySignature);
   const toKey = parseKey(to.keySignature);
   const relation = fromKey && toKey ? harmonicRelation(fromKey, toKey) : null;
   const harmonic = fromKey && toKey ? harmonicScore(fromKey, toKey) : null;
-  const energyDelta = to.energy - from.energy;
+  // Null when either side is unscored: a delta against an unknown value is
+  // not zero, and a "±0" pill would read as "these match".
+  const energyDelta =
+    to.energy === null || from.energy === null ? null : to.energy - from.energy;
 
-  const mixSeconds = from.bpm === null ? null : barSeconds(from.bpm) * transition.bars;
+  const mixSeconds =
+    from.bpm === null || transition.bars === null
+      ? null
+      : barSeconds(from.bpm) * transition.bars;
 
   function commitNotes(next: string) {
     setIsEditingNotes(false);
@@ -202,7 +215,7 @@ function TransitionBody({
                 <span className="flex items-center gap-1">
                   <NumberField
                     aria-label="Mix duration in bars"
-                    value={transition.bars}
+                    value={transition.bars ?? NO_BARS}
                     minValue={MIN_BARS}
                     maxValue={MAX_BARS}
                     step={1}
@@ -282,20 +295,24 @@ function TransitionBody({
 
             <Field
               label="Energy"
-              aside={
-                <Pill
-                  tone={
-                    Math.abs(energyDelta) >= 3
-                      ? "danger"
-                      : Math.abs(energyDelta) >= 2
-                        ? "warn"
-                        : "neutral"
+              {...(energyDelta !== null
+                ? {
+                    aside: (
+                      <Pill
+                        tone={
+                          Math.abs(energyDelta) >= 3
+                            ? "danger"
+                            : Math.abs(energyDelta) >= 2
+                              ? "warn"
+                              : "neutral"
+                        }
+                      >
+                        {energyDelta > 0 ? "+" : energyDelta < 0 ? "−" : "±"}
+                        {Math.abs(energyDelta)}
+                      </Pill>
+                    ),
                   }
-                >
-                  {energyDelta > 0 ? "+" : energyDelta < 0 ? "−" : "±"}
-                  {Math.abs(energyDelta)}
-                </Pill>
-              }
+                : {})}
             >
               <span className="inline-flex items-center gap-1.5">
                 <EnergyDots value={from.energy} size={5} />
@@ -314,9 +331,15 @@ function TransitionBody({
                 </Pill>
               }
             >
-              <span className={cx("font-mono tabular-nums", scoreTone(transition.confidence))}>
-                {Math.round(transition.confidence * 100)}%
-              </span>
+              {transition.confidence === null ? (
+                <span className="text-ink-subtle font-mono tabular-nums">—</span>
+              ) : (
+                <span
+                  className={cx("font-mono tabular-nums", scoreTone(transition.confidence))}
+                >
+                  {Math.round(transition.confidence * 100)}%
+                </span>
+              )}
             </Field>
           </dl>
         </Section>
@@ -490,7 +513,7 @@ function TechniqueMark({ spec }: { spec: TechniqueSpec }) {
   );
 }
 
-function TransitionEnd({ track, role }: { track: DemoTrack; role: string }) {
+function TransitionEnd({ track, role }: { track: WorkspaceTrack; role: string }) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <Artwork seed={track.id} size={32} />

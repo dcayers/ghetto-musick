@@ -48,7 +48,7 @@ import {
   useWorkspace,
   type LibraryFilters,
 } from "../../state/workspace.js";
-import type { DemoGraphNode, DemoTrack } from "../../lib/demo-data.js";
+import type { WorkspaceGraphNode, WorkspaceTrack } from "../../lib/workspace-data.js";
 
 /**
  * The track library.
@@ -113,7 +113,7 @@ function camelotOrder(key: string): number {
 }
 
 function matches(
-  track: DemoTrack,
+  track: WorkspaceTrack,
   filters: LibraryFilters,
   placed: ReadonlySet<string>,
   inSet: ReadonlySet<string>,
@@ -134,7 +134,11 @@ function matches(
   if (filters.genre !== null && track.genre !== filters.genre) return false;
   if (filters.key !== null && track.keySignature !== filters.key) return false;
   if (filters.source !== null && track.source !== filters.source) return false;
-  if (filters.minEnergy !== null && track.energy < filters.minEnergy) return false;
+  if (
+    filters.minEnergy !== null &&
+    (track.energy === null || track.energy < filters.minEnergy)
+  )
+    return false;
 
   // A track with no analysed tempo cannot satisfy a tempo window; excluding it
   // is the honest answer, and the source dot already explains why.
@@ -158,7 +162,7 @@ const OVERSCAN = 5;
  * the next step rather than as debris. The canvas re-fits, so this only has to
  * be sensible, not exact.
  */
-function nextNodePosition(nodes: readonly DemoGraphNode[]): { x: number; y: number } {
+function nextNodePosition(nodes: readonly WorkspaceGraphNode[]): { x: number; y: number } {
   if (nodes.length === 0) return { x: 0, y: 0 };
   const maxX = Math.max(...nodes.map((node) => node.x));
   const meanY = Math.round(nodes.reduce((sum, node) => sum + node.y, 0) / nodes.length);
@@ -295,7 +299,10 @@ export function LibraryPanel() {
   // data would otherwise be unfilterable, and one that no longer exists would
   // sit in the menu returning nothing.
   const genres = useMemo(
-    () => [...new Set(tracks.map((track) => track.genre))].sort((a, b) => a.localeCompare(b)),
+    () =>
+      [...new Set(tracks.map((track) => track.genre))]
+        .filter((genre): genre is string => genre !== null)
+        .sort((a, b) => a.localeCompare(b)),
     [tracks],
   );
   const keys = useMemo(() => {
@@ -416,7 +423,7 @@ export function LibraryPanel() {
     focusRow(next);
   }
 
-  function addToCanvas(track: DemoTrack) {
+  function addToCanvas(track: WorkspaceTrack) {
     if (placed.has(track.id)) {
       announce(`${track.title} is already on the canvas.`);
       return;

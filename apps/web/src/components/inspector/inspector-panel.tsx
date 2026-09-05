@@ -3,8 +3,7 @@ import { Panel, EmptyState, Skeleton } from "../primitives.js";
 import { IconButton } from "../ui.js";
 import { TrackInspector } from "./track-inspector.js";
 import { TransitionInspector } from "./transition-inspector.js";
-import { useWorkspace } from "../../state/workspace.js";
-import { trackById } from "../../lib/demo-data.js";
+import { useTrackById, useWorkspace } from "../../state/workspace.js";
 
 /**
  * The right column.
@@ -23,7 +22,7 @@ export function InspectorPanel({ isLoading = false }: { isLoading?: boolean }) {
   const transition = selectedTransitionId
     ? (transitions.find((tx) => tx.id === selectedTransitionId) ?? null)
     : null;
-  const track = trackById(selectedTrackId);
+  const track = useTrackById(selectedTrackId);
 
   return (
     <Panel

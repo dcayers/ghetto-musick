@@ -58,6 +58,38 @@ export async function listTracks(params?: {
   return data;
 }
 
+/**
+ * Every track in the workspace.
+ *
+ * The library filters and sorts client-side over the full list, so it needs
+ * all of it rather than a page. `limit` is capped at 100 by the contract, so
+ * this walks the cursor — bounded, because an unbounded loop against a
+ * paginated endpoint is a hang waiting for a large library. Past the cap the
+ * library is simply short, which the caller can say.
+ */
+const TRACK_PAGE_SIZE = 100;
+const MAX_TRACK_PAGES = 20;
+
+export async function listAllTracks(): Promise<{
+  items: TrackPage["items"];
+  truncated: boolean;
+}> {
+  const items: TrackPage["items"] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < MAX_TRACK_PAGES; page += 1) {
+    const result = await listTracks({
+      limit: TRACK_PAGE_SIZE,
+      ...(cursor ? { cursor } : {}),
+    });
+    items.push(...result.items);
+    if (!result.nextCursor) return { items, truncated: false };
+    cursor = result.nextCursor;
+  }
+
+  return { items, truncated: true };
+}
+
 export interface SignInInput {
   email: string;
   password: string;

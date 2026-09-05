@@ -22,13 +22,13 @@ import { TransitionEdge, type TransitionEdgeData } from "./transition-edge.js";
 import { CanvasToolbar, CanvasZoomControls, type CanvasTool } from "../canvas-tools.js";
 import { EmptyState } from "../primitives.js";
 import { IconButton } from "../ui.js";
-import { techniqueSpec } from "../../lib/demo-data.js";
+import { techniqueSpec } from "../../lib/workspace-data.js";
 import type {
-  DemoGraphNode,
-  DemoSet,
-  DemoTrack,
-  DemoTransition,
-} from "../../lib/demo-data.js";
+  WorkspaceGraphNode,
+  WorkspaceSet,
+  WorkspaceTrack,
+  WorkspaceTransition,
+} from "../../lib/workspace-data.js";
 import {
   useActiveSetTransitionIds,
   useWorkspace,
@@ -90,10 +90,10 @@ type CanvasEdge = RFEdge<TransitionEdgeData>;
 /* -------------------------------------------------------------- projection -- */
 
 interface ProjectionInput {
-  readonly tracks: readonly DemoTrack[];
-  readonly graphNodes: readonly DemoGraphNode[];
-  readonly transitions: readonly DemoTransition[];
-  readonly activeSet: DemoSet;
+  readonly tracks: readonly WorkspaceTrack[];
+  readonly graphNodes: readonly WorkspaceGraphNode[];
+  readonly transitions: readonly WorkspaceTransition[];
+  readonly activeSet: WorkspaceSet;
   readonly activeSetTransitionIds: ReadonlySet<string>;
   readonly selectedTrackId: string | null;
   readonly selectedTransitionId: string | null;

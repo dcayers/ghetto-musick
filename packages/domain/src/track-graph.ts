@@ -19,8 +19,8 @@ export interface TransitionAttributes {
   readonly id: string;
   readonly technique?: string;
   readonly tags?: readonly string[];
-  /** User-authored confidence in this transition, 0–1. */
-  readonly confidence?: number;
+  /** Confidence in this transition, 0–1. Null when none is recorded. */
+  readonly confidence?: number | null;
 }
 
 export type TrackGraph = DirectedGraph<ScorableTrack, TransitionAttributes>;
@@ -42,7 +42,7 @@ export interface TransitionInput {
   readonly targetTrackId: string;
   readonly technique?: string;
   readonly tags?: readonly string[];
-  readonly confidence?: number;
+  readonly confidence?: number | null;
 }
 
 /**
@@ -75,7 +75,9 @@ export function buildTrackGraph(
       id: transition.id,
       ...(transition.technique !== undefined ? { technique: transition.technique } : {}),
       ...(transition.tags !== undefined ? { tags: transition.tags } : {}),
-      ...(transition.confidence !== undefined ? { confidence: transition.confidence } : {}),
+      // Null and undefined both mean "no score recorded", and the attribute
+      // is optional, so absence is the one representation of it.
+      ...(transition.confidence != null ? { confidence: transition.confidence } : {}),
     });
   }
 

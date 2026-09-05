@@ -5,11 +5,20 @@ import {
   TRANSITIONS,
   TRACKS,
   activeSetTransitionIds,
-  type DemoGraphNode,
-  type DemoSet,
-  type DemoTrack,
-  type DemoTransition,
-} from "../lib/demo-data.js";
+  type WorkspaceGraphNode,
+  type WorkspaceSet,
+  type WorkspaceTrack,
+  type WorkspaceTransition,
+} from "../lib/workspace-data.js";
+import { adaptGraph, adaptNode, mergeTracks, type AdaptedGraph } from "../lib/adapt.js";
+import {
+  GraphConflictError,
+  addNode as addNodeRequest,
+  deleteTransition as deleteTransitionRequest,
+  getGraph,
+  saveLayout,
+  type NodePosition,
+} from "../lib/graph-api.js";
 
 /**
  * The workspace store.
@@ -67,12 +76,32 @@ export const EMPTY_FILTERS: LibraryFilters = {
   minEnergy: null,
 };
 
+/**
+ * Where the workspace's data came from.
+ *
+ * `demo` is the static snapshot: every mutation stays in memory, which is what
+ * it is for. `live` is the API, and the same mutations are writes. The two are
+ * never mixed — a workspace is one or the other for the life of the page.
+ */
+export type DataSource = "demo" | "live";
+
+export interface LiveGraphPayload {
+  readonly graph: AdaptedGraph;
+  /** The library page. Merged behind the graph's own inline tracks. */
+  readonly tracks: readonly WorkspaceTrack[];
+}
+
 interface WorkspaceState {
   /* Data */
-  tracks: readonly DemoTrack[];
-  nodes: readonly DemoGraphNode[];
-  transitions: readonly DemoTransition[];
-  set: DemoSet;
+  source: DataSource;
+  /** The graph being edited, or null in demo mode. */
+  graphId: string | null;
+  /** Optimistic-concurrency token for layout writes — plan §10.1. */
+  graphVersion: number;
+  tracks: readonly WorkspaceTrack[];
+  nodes: readonly WorkspaceGraphNode[];
+  transitions: readonly WorkspaceTransition[];
+  set: WorkspaceSet;
 
   /* Selection */
   selectedTrackId: string | null;
@@ -100,6 +129,8 @@ interface WorkspaceState {
   statusId: number;
 
   /* Actions */
+  /** Replaces the demo snapshot with a live graph and library page. */
+  hydrateLive: (payload: LiveGraphPayload) => void;
   selectTrack: (trackId: string | null) => void;
   selectTransition: (transitionId: string | null) => void;
   setMultiSelection: (trackIds: readonly string[]) => void;
@@ -115,7 +146,7 @@ interface WorkspaceState {
   reorderSet: (from: number, to: number) => void;
   addTrackToGraph: (trackId: string, x: number, y: number) => void;
   removeTransition: (transitionId: string) => void;
-  updateTransition: (transitionId: string, patch: Partial<DemoTransition>) => void;
+  updateTransition: (transitionId: string, patch: Partial<WorkspaceTransition>) => void;
   announce: (message: string | null) => void;
 }
 
@@ -213,11 +244,128 @@ function persist(state: WorkspaceState): void {
   }
 }
 
+/* ------------------------------------------------------- server writes -- */
+
+/**
+ * Layout persistence.
+ *
+ * A drag produces a position change per frame and a settling change on
+ * release; the canvas already filters to the settling one, but dragging four
+ * nodes in quick succession still produces four writes against a version token
+ * that each write increments. Batching them into one debounced request is what
+ * the bounded `positions` array in `updateLayoutSchema` is for (§6.3, §9.8).
+ *
+ * The queue lives at module scope rather than in the store because it is
+ * transport state, not workspace state: nothing renders it, and putting it in
+ * the store would make every queued position a re-render.
+ */
+const LAYOUT_DEBOUNCE_MS = 600;
+
+const pendingPositions = new Map<string, NodePosition>();
+let layoutTimer: ReturnType<typeof setTimeout> | null = null;
+let layoutInFlight = false;
+
+/** Optimistic ids for nodes the server has not acknowledged yet. */
+const TEMP_NODE_PREFIX = "pending-";
+const isTempId = (id: string) => id.startsWith(TEMP_NODE_PREFIX);
+
+function scheduleLayoutFlush(): void {
+  if (layoutTimer !== null) clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => {
+    layoutTimer = null;
+    void flushLayout();
+  }, LAYOUT_DEBOUNCE_MS);
+}
+
+async function flushLayout(): Promise<void> {
+  // Serialised deliberately. Two concurrent PATCHes would carry the same
+  // `expectedVersion`, and the second would 409 against a version its own
+  // sibling had just bumped — a self-inflicted conflict.
+  if (layoutInFlight) {
+    scheduleLayoutFlush();
+    return;
+  }
+
+  const state = useWorkspace.getState();
+  const graphId = state.graphId;
+  if (state.source !== "live" || graphId === null || pendingPositions.size === 0) return;
+
+  const batch = [...pendingPositions.values()];
+  pendingPositions.clear();
+  layoutInFlight = true;
+  useWorkspace.setState({ saveState: "saving" });
+
+  try {
+    const version = await saveLayout(graphId, state.graphVersion, batch);
+    useWorkspace.setState((current) => ({
+      graphVersion: version,
+      // Another move may have been queued while this request was open; saying
+      // "saved" then would describe the request rather than the workspace.
+      saveState: pendingPositions.size > 0 ? "unsaved" : current.saveState === "saving" ? "saved" : current.saveState,
+    }));
+  } catch (error) {
+    if (error instanceof GraphConflictError) {
+      // The version moved under us, so these positions were computed against a
+      // graph that no longer exists. Reloading is the recovery the plan asks
+      // for; replaying them would be the clobber it forbids.
+      await reloadGraph(graphId, "The graph changed in another window — reloaded.");
+    } else {
+      // Keep the positions so the next flush retries them rather than losing
+      // the drag silently.
+      for (const position of batch) {
+        if (!pendingPositions.has(position.id)) pendingPositions.set(position.id, position);
+      }
+      useWorkspace.setState({ saveState: "unsaved" });
+      useWorkspace
+        .getState()
+        .announce(error instanceof Error ? error.message : "Could not save the layout.");
+    }
+  } finally {
+    layoutInFlight = false;
+    if (pendingPositions.size > 0) scheduleLayoutFlush();
+  }
+}
+
+async function reloadGraph(graphId: string, message: string): Promise<void> {
+  try {
+    const detail = adaptGraph(await getGraph(graphId));
+    pendingPositions.clear();
+    useWorkspace.setState((current) => ({
+      graphId: detail.graphId,
+      graphVersion: detail.graphVersion,
+      nodes: detail.nodes,
+      transitions: detail.transitions,
+      tracks: mergeTracks(current.tracks, detail.nodeTracks),
+      saveState: "saved",
+    }));
+    useWorkspace.getState().announce(message);
+  } catch (error) {
+    useWorkspace.setState({ saveState: "unsaved" });
+    useWorkspace
+      .getState()
+      .announce(error instanceof Error ? error.message : "Could not reload the graph.");
+  }
+}
+
+/**
+ * Said once per session, not once per edit.
+ *
+ * Transition attributes — technique, bar length, notes — have no PATCH
+ * endpoint yet (§8.3 defines create and delete only), so those edits live in
+ * memory. The store still applies them, because refusing the edit would be a
+ * worse answer than an honest one, but the workspace has to say so rather than
+ * showing an indicator that can never reach "saved".
+ */
+let warnedAboutTransitionEdits = false;
+
 /* ------------------------------------------------------------------ store -- */
 
 const initial = loadPersisted();
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
+  source: "demo",
+  graphId: null,
+  graphVersion: 0,
   tracks: TRACKS,
   nodes: NODES,
   transitions: TRANSITIONS,
@@ -236,6 +384,28 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   openSections: initial.openSections,
   status: null,
   statusId: 0,
+
+  hydrateLive: ({ graph, tracks }) => {
+    pendingPositions.clear();
+    set({
+      source: "live",
+      graphId: graph.graphId,
+      graphVersion: graph.graphVersion,
+      nodes: graph.nodes,
+      transitions: graph.transitions,
+      // Graph-inline tracks first: a node whose track is absent renders as
+      // nothing, so the canvas must not depend on the library page arriving.
+      tracks: mergeTracks(graph.nodeTracks, tracks),
+      // The demo set references demo track ids that do not exist in a live
+      // workspace. Sets have no API yet (plan §25.9 step 4), so the timeline
+      // starts empty rather than pointing at tracks that are not there.
+      set: { id: "unsaved-set", name: "Untitled set", trackIds: [], targetBpm: 124, targetKey: "8A" },
+      selectedTrackId: graph.nodes[0]?.trackId ?? null,
+      selectedTransitionId: null,
+      multiSelectedTrackIds: [],
+      saveState: "saved",
+    });
+  },
 
   selectTrack: (trackId) =>
     set({
@@ -296,14 +466,21 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     persist(get());
   },
 
-  moveNode: (nodeId, x, y) =>
+  moveNode: (nodeId, x, y) => {
     set((state) => ({
       nodes: state.nodes.map((node) => (node.id === nodeId ? { ...node, x, y } : node)),
       // "unsaved", like every other mutation. This previously set "saved",
       // which meant nudging a node silently cleared a genuinely-unsaved
       // reorder — the top bar would read Saved with two pending changes.
       saveState: "unsaved",
-    })),
+    }));
+
+    // A node the server has not acknowledged yet has no id the layout endpoint
+    // would recognise; its position rides along with the POST that creates it.
+    if (get().source !== "live" || isTempId(nodeId)) return;
+    pendingPositions.set(nodeId, { id: nodeId, x, y });
+    scheduleLayoutFlush();
+  },
 
   reorderSet: (from, to) =>
     set((state) => {
@@ -317,31 +494,108 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       return { set: { ...state.set, trackIds: ids }, saveState: "unsaved" };
     }),
 
-  addTrackToGraph: (trackId, x, y) =>
-    set((state) => {
-      if (state.nodes.some((node) => node.trackId === trackId)) return state;
-      return {
+  addTrackToGraph: (trackId, x, y) => {
+    const before = get();
+    if (before.nodes.some((node) => node.trackId === trackId)) return;
+
+    if (before.source !== "live") {
+      set((state) => ({
         nodes: [...state.nodes, { id: `node-${trackId}`, trackId, x, y }],
         selectedTrackId: trackId,
         selectedTransitionId: null,
         saveState: "unsaved",
-      };
-    }),
+      }));
+      return;
+    }
 
-  removeTransition: (transitionId) =>
+    const graphId = before.graphId;
+    if (graphId === null) return;
+
+    // Placed immediately under a temporary id, then reconciled. A drop that
+    // waits for a round trip before drawing anything reads as a failed drop.
+    const tempId = `${TEMP_NODE_PREFIX}${trackId}`;
+    set((state) => ({
+      nodes: [...state.nodes, { id: tempId, trackId, x, y }],
+      selectedTrackId: trackId,
+      selectedTransitionId: null,
+      saveState: "saving",
+    }));
+
+    void (async () => {
+      try {
+        const created = adaptNode(await addNodeRequest(graphId, { trackId, x, y }));
+        set((state) => ({
+          // Swapped in place: the node may have been dragged while the request
+          // was open, so the server's id is taken but the local position kept,
+          // and that position is then queued under the real id.
+          nodes: state.nodes.map((node) =>
+            node.id === tempId ? { ...created, x: node.x, y: node.y } : node,
+          ),
+          saveState: "saved",
+        }));
+
+        const placed = get().nodes.find((node) => node.id === created.id);
+        if (placed && (placed.x !== created.x || placed.y !== created.y)) {
+          pendingPositions.set(created.id, { id: created.id, x: placed.x, y: placed.y });
+          scheduleLayoutFlush();
+        }
+      } catch (error) {
+        set((state) => ({
+          nodes: state.nodes.filter((node) => node.id !== tempId),
+          saveState: "saved",
+        }));
+        get().announce(
+          error instanceof Error ? error.message : "Could not place that track.",
+        );
+      }
+    })();
+  },
+
+  removeTransition: (transitionId) => {
+    const before = get();
+    const removed = before.transitions.find((tx) => tx.id === transitionId);
+    if (!removed) return;
+
     set((state) => ({
       transitions: state.transitions.filter((tx) => tx.id !== transitionId),
       selectedTransitionId: null,
-      saveState: "unsaved",
-    })),
+      saveState: before.source === "live" ? "saving" : "unsaved",
+    }));
 
-  updateTransition: (transitionId, patch) =>
+    if (before.source !== "live") return;
+
+    void (async () => {
+      try {
+        await deleteTransitionRequest(transitionId);
+        set({ saveState: "saved" });
+      } catch (error) {
+        // Put it back. A delete that failed on the server but succeeded on
+        // screen is the one outcome worse than a visible error.
+        set((state) => ({
+          transitions: [...state.transitions, removed],
+          saveState: "saved",
+        }));
+        get().announce(
+          error instanceof Error ? error.message : "Could not delete that transition.",
+        );
+      }
+    })();
+  },
+
+  updateTransition: (transitionId, patch) => {
     set((state) => ({
       transitions: state.transitions.map((tx) =>
         tx.id === transitionId ? { ...tx, ...patch } : tx,
       ),
       saveState: "unsaved",
-    })),
+    }));
+
+    if (get().source !== "live" || warnedAboutTransitionEdits) return;
+    warnedAboutTransitionEdits = true;
+    get().announce(
+      "Transition details are not saved yet — the API has no endpoint to update them.",
+    );
+  },
 
   announce: (status) => set((state) => ({ status, statusId: state.statusId + 1 })),
 }));
@@ -353,6 +607,23 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
  * call site so two surfaces cannot compute "is this track in the set" from
  * different rules. Each returns a stable primitive or a memo-friendly value.
  */
+
+/**
+ * Resolves a track id against whatever the workspace currently holds.
+ *
+ * This replaced a module-level `Map` over the demo constant. That lookup was
+ * invisible until the store held live data, at which point every node on the
+ * canvas rendered "Track unavailable" — it was resolving live ids against demo
+ * tracks. A track can only be found in the one place tracks live.
+ *
+ * `find` returns the same object reference for an unchanged array, so the
+ * selector is referentially stable and does not re-render on unrelated writes.
+ */
+export function useTrackById(id: string | null | undefined): WorkspaceTrack | null {
+  return useWorkspace((state) =>
+    id ? (state.tracks.find((track) => track.id === id) ?? null) : null,
+  );
+}
 
 export function useSelectedTrackId(): string | null {
   return useWorkspace((state) => state.selectedTrackId);

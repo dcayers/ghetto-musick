@@ -1,8 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { Layers, Sparkles, TriangleAlert } from "lucide-react";
-import { trackById } from "../../lib/demo-data.js";
-import { useWorkspace } from "../../state/workspace.js";
+import { useTrackById, useWorkspace } from "../../state/workspace.js";
 import {
   Artwork,
   Bpm,
@@ -54,7 +53,7 @@ export const TrackNode = memo(function TrackNode({
     state.multiSelectedTrackIds.includes(data.trackId),
   );
 
-  const track = trackById(data.trackId);
+  const track = useTrackById(data.trackId);
 
   // Mutually exclusive by construction: a member of a group that is not the
   // primary reads as multi-selected even while React Flow also flags it

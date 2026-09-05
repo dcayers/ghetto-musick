@@ -11,7 +11,7 @@ import {
 import { ChevronDown, Star, Plus } from "lucide-react";
 import { cx, Waveform } from "./primitives.js";
 import { useWorkspace } from "../state/workspace.js";
-import { waveformPeaks } from "../lib/demo-data.js";
+import { waveformPeaks } from "../lib/workspace-data.js";
 
 /**
  * Shared controls.
@@ -39,14 +39,15 @@ export interface WaveformCue {
 export function DetailWaveform({
   trackId,
   durationSeconds,
-  energy: _energy = 3,
+  energy: _energy = null,
   cues = [],
   positionSeconds,
   onSeek,
 }: {
   trackId: string;
-  durationSeconds: number;
-  energy?: number;
+  /** Null when the running time is unknown — the scrub track is inert. */
+  durationSeconds: number | null;
+  energy?: number | null;
   cues?: WaveformCue[];
   positionSeconds?: number;
   onSeek?: (seconds: number) => void;
@@ -62,12 +63,14 @@ export function DetailWaveform({
         preserveAspectRatio="none"
         className={cx(
           "bg-surface-raised rounded-card h-[72px] w-full",
-          onSeek && "cursor-pointer",
+          onSeek && durationSeconds !== null && "cursor-pointer",
         )}
         role="img"
         aria-label={`Waveform, ${cues.length} cue markers`}
         onClick={(event) => {
-          if (!onSeek) return;
+          // Without a duration a click maps to no timestamp, so the
+          // waveform is a picture rather than a scrub track.
+          if (!onSeek || durationSeconds === null) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const ratio = (event.clientX - rect.left) / rect.width;
           onSeek(Math.max(0, Math.min(1, ratio)) * durationSeconds);
@@ -92,7 +95,7 @@ export function DetailWaveform({
           key={`${cue.label}-${cue.seconds}`}
           className="pointer-events-none absolute top-0 h-[72px] w-px"
           style={{
-            left: `${(cue.seconds / Math.max(1, durationSeconds)) * 100}%`,
+            left: `${(cue.seconds / Math.max(1, durationSeconds ?? 1)) * 100}%`,
             background: cue.color,
           }}
           title={cue.label}
@@ -104,7 +107,7 @@ export function DetailWaveform({
         </div>
       ))}
 
-      {positionSeconds !== undefined && (
+      {positionSeconds !== undefined && durationSeconds !== null && (
         <div
           aria-hidden="true"
           className="bg-ink pointer-events-none absolute top-0 h-[72px] w-px"
@@ -212,7 +215,8 @@ export function StarRating({
   max = 5,
   onChange,
 }: {
-  value: number;
+  /** Null renders an unrated control rather than a zero-star rating. */
+  value: number | null;
   max?: number;
   onChange?: (value: number) => void;
 }) {
@@ -233,7 +237,9 @@ export function StarRating({
           <Star
             size={11}
             aria-hidden="true"
-            className={index < value ? "fill-warn text-warn" : "text-border-strong"}
+            className={
+              index < (value ?? 0) ? "fill-warn text-warn" : "text-border-strong"
+            }
           />
         </Button>
       ))}
