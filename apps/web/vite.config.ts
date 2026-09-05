@@ -2,6 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+/**
+ * Where the API lives.
+ *
+ * Overridable so an end-to-end run can start its own API on a free port
+ * without colliding with a dev server already on 4000.
+ */
+const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:4000";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
@@ -11,9 +19,9 @@ export default defineConfig({
     // CORS preflight or SameSite=None — which would otherwise force
     // Secure-only cookies and break plain http://localhost.
     proxy: {
-      "/v1": { target: "http://127.0.0.1:4000", changeOrigin: true },
-      "/api/auth": { target: "http://127.0.0.1:4000", changeOrigin: true },
-      "/health": { target: "http://127.0.0.1:4000", changeOrigin: true },
+      "/v1": { target: apiTarget, changeOrigin: true },
+      "/api/auth": { target: apiTarget, changeOrigin: true },
+      "/health": { target: apiTarget, changeOrigin: true },
     },
   },
 });

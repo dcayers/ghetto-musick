@@ -143,6 +143,17 @@ canvas in Chromium, so it needs no running dev server. The measured result
 and the decision it produced are in
 [ADR-0011](docs/adr/0011-graph-render-budget.md).
 
+```bash
+pnpm test:e2e          # the whole journey in a browser — needs Docker
+```
+
+`pnpm test:e2e` starts a throwaway PostgreSQL, API, and web server, writes a
+fixture `_Serato_` library to a temp directory, and drives the real product in
+Chromium: sign up, create a graph, import, place tracks, connect them, build a
+set. Steps that must *persist* are asserted again after a page reload. It
+shares nothing with the development stack, so it neither reads your real Serato
+library nor touches your dev database.
+
 `pnpm test:integration` starts its own PostgreSQL through Testcontainers and
 applies the real migrations to it, so it neither touches nor depends on the
 development database from `pnpm infra:up`. It covers what a mocked Prisma

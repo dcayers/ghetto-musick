@@ -25,6 +25,23 @@ const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter((origin) => origin.length > 0),
     ),
+  /**
+   * Extra `_Serato_` directories to offer alongside the standard macOS ones.
+   *
+   * Comma-separated absolute paths. A DJ's library often lives on an external
+   * drive, which is exactly the case `defaultSeratoRoots` misses — and it is
+   * what lets an end-to-end test point the import at a fixture instead of
+   * reading whatever is on the machine running it.
+   */
+  SERATO_ROOTS: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((root) => root.trim())
+        .filter((root) => root.length > 0),
+    ),
   LOG_QUERIES: z
     .string()
     .optional()

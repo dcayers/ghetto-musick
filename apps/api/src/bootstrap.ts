@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { config as loadDotenv } from "dotenv";
 import { Rikta, container, type FastifyInstance } from "@riktajs/core";
@@ -63,7 +64,7 @@ loadDotenv({
  * themselves: Rikta's `Token<T>` requires `new (...args: unknown[]) => T`, and
  * a constructor with typed parameters is not assignable to that. See tokens.ts.
  */
-function registerProviders(prisma: PrismaClient, auth: Auth): void {
+function registerProviders(prisma: PrismaClient, auth: Auth, env: Env): void {
   const trackRepository = new TrackRepository(prisma);
 
   container.registerValue(TRACK_SERVICE, new TrackService(trackRepository));
@@ -74,7 +75,10 @@ function registerProviders(prisma: PrismaClient, auth: Auth): void {
   // (ADR-0006) registers a different one here and nothing else changes.
   container.registerValue(
     IMPORT_SERVICE,
-    new ImportService(new ImportRepository(prisma), new LocalSeratoSource()),
+    new ImportService(
+      new ImportRepository(prisma),
+      new LocalSeratoSource(homedir(), env.SERATO_ROOTS),
+    ),
   );
   container.registerValue(WORKSPACE_CONTEXT, new WorkspaceContextService(auth, prisma));
 }
@@ -146,7 +150,7 @@ async function main(): Promise<void> {
     },
   });
 
-  registerProviders(prisma, auth);
+  registerProviders(prisma, auth, env);
 
   const app = await Rikta.create({
     port: env.API_PORT,

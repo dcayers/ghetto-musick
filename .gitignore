@@ -38,3 +38,7 @@ apps/desktop-bridge/src-tauri/target/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Playwright
+test-results/
+playwright-report/

@@ -23,10 +23,13 @@
     "openapi": "pnpm --filter @flowgraph/api run openapi:generate",
     "api-client:generate": "pnpm --filter @flowgraph/api-client run generate",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "perf": "pnpm --filter @flowgraph/web run perf"
+    "perf": "pnpm --filter @flowgraph/web run perf",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@flowgraph/serato": "workspace:*",
+    "@playwright/test": "^1.63.0",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.19.0",
     "@vitest/coverage-v8": "^4.1.10",
@@ -37,6 +40,7 @@
     "tsx": "^4.23.1",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.65.0",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10"
   },
   "pnpm": {

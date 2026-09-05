@@ -120,6 +120,17 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
+      # Plan §21.4 puts E2E on "merge candidates", not on every PR — it starts
+      # a database, an API, and a web server, and the cost is not worth paying
+      # on a docs change. `main` is where work lands, so that is the gate.
+      - name: Install Playwright Chromium
+        if: github.ref == 'refs/heads/main'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        if: github.ref == 'refs/heads/main'
+        run: pnpm test:e2e
+
       # Phase 0 exit criterion: CI provisions a real Postgres and validates a
       # migration. `migrate deploy` is the production command — never db push.
       - name: Apply migrations
