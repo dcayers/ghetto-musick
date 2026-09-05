@@ -10,6 +10,7 @@ import type {
   AddGraphNodeInput,
   CreateGraphInput,
   CreateTransitionInput,
+  UpdateTransitionInput,
   GraphDetail,
   GraphNodeDto,
   TransitionDto,
@@ -33,6 +34,20 @@ export class SelfTransitionError extends Error {
   constructor() {
     super("A transition cannot start and end on the same track");
     this.name = "SelfTransitionError";
+  }
+}
+
+/**
+ * Raised when a technique change would collide with another edge.
+ *
+ * Its own error rather than a reused not-found because the two need different
+ * status codes: the transition exists and the caller may retry with a
+ * different technique, which is a 409, not a 404.
+ */
+export class TransitionTechniqueTakenError extends Error {
+  constructor() {
+    super("Those tracks are already connected with that technique");
+    this.name = "TransitionTechniqueTakenError";
   }
 }
 
@@ -137,6 +152,26 @@ export class GraphService {
     return toTransitionDto(transition);
   }
 
+  /**
+   * Refines a transition after it was quick-created — plan §10.1.
+   *
+   * The stored score is deliberately left alone. `scoreTransition` takes the
+   * two tracks and nothing else, so no field this endpoint can change is an
+   * input to it: re-scoring here would rewrite the §10.2 snapshot with an
+   * identical number under a possibly newer algorithm version, quietly
+   * restating a claim the user never asked to have restated.
+   */
+  async updateTransition(
+    workspaceId: string,
+    transitionId: string,
+    input: UpdateTransitionInput,
+  ): Promise<TransitionDto> {
+    const result = await this.repository.updateTransition(workspaceId, transitionId, input);
+    if (result === "not-found") throw new GraphNotFoundError(transitionId);
+    if (result === "technique-taken") throw new TransitionTechniqueTakenError();
+    return toTransitionDto(result);
+  }
+
   async deleteTransition(workspaceId: string, transitionId: string): Promise<void> {
     const deleted = await this.repository.deleteTransition(workspaceId, transitionId);
     if (!deleted) throw new GraphNotFoundError(transitionId);
@@ -231,6 +266,7 @@ function toTransitionDto(transition: Transition): TransitionDto {
     technique: transition.technique,
     notes: transition.notes,
     tags: transition.tags,
+    bars: transition.bars,
     score: transition.score === null ? null : Number(transition.score),
     scoreAlgorithm: transition.scoreAlgorithm,
     createdAt: transition.createdAt.toISOString(),

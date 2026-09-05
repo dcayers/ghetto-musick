@@ -127,7 +127,13 @@ export const TransitionEdge = memo(function TransitionEdge({
   const from = useTrackById(transition?.sourceTrackId);
   const to = useTrackById(transition?.targetTrackId);
   const endpoints = from && to ? ` from ${from.title} to ${to.title}` : "";
-  const length = transition ? `, ${transition.bars} bars` : "";
+  // Omitted when the length has not been chosen: a template literal reads a
+  // null as the word "null", so this announced "Echo out, null bars" for every
+  // transition drawn on the canvas and not yet refined.
+  const length =
+    transition?.bars === null || transition?.bars === undefined
+      ? ""
+      : `, ${transition.bars} bars`;
   const ariaLabel =
     `${spec.label}${endpoints}${length}` +
     (isAiSuggested ? ", AI suggested" : "") +

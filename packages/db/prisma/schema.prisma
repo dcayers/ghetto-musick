@@ -202,6 +202,12 @@ model Transition {
   notes     String?
   tags      String[]
 
+  // Planned mix length, in bars — the recipe field of plan §10.2, and the unit
+  // DJs actually plan in. Nullable because §10.1 quick-creates a transition
+  // with a default technique and refines it in the inspector afterwards, so
+  // "not decided yet" is a real state that zero would misreport as "no mix".
+  bars Int?
+
   // Snapshot of the deterministic score at authoring time, with the algorithm
   // version that produced it — plan §10.2. Without the version a weights
   // change silently reinterprets every stored score.

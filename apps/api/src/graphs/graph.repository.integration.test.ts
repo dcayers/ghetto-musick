@@ -171,4 +171,148 @@ describe("graph persistence", () => {
     expect(await repository.listTransitions(workspaceId)).toHaveLength(1);
     expect(await db().track.count({ where: { workspaceId } })).toBe(2);
   });
+  /**
+   * Refinement — plan §8.3, §10.1.
+   *
+   * The awkward half is that technique is part of the uniqueness key, so a
+   * technique change is a constraint operation dressed up as a field edit.
+   * Only a real database settles what happens at that boundary: a mocked
+   * Prisma would report whatever collision behaviour the mock was told to.
+   */
+  describe("refining a transition", () => {
+    async function seedPair() {
+      const repository = new GraphRepository(db());
+      const a = await seedTrack(db(), workspaceId, { title: "A" });
+      const b = await seedTrack(db(), workspaceId, { title: "B" });
+      const transition = await repository.createTransition(
+        workspaceId,
+        { fromTrackId: a, toTrackId: b, technique: "blend", tags: [] },
+        { value: 0.8, algorithmVersion: 1 },
+      );
+      return { repository, a, b, transition: transition! };
+    }
+
+    it("changes only the fields the patch names", async () => {
+      const { repository, transition } = await seedPair();
+
+      const updated = await repository.updateTransition(workspaceId, transition.id, {
+        bars: 32,
+      });
+
+      expect(updated).not.toBe("not-found");
+      expect(updated).not.toBe("technique-taken");
+      const row = updated as Exclude<typeof updated, string>;
+      expect(row.bars).toBe(32);
+      // Untouched, because the patch did not mention them.
+      expect(row.technique).toBe("blend");
+      expect(row.notes).toBeNull();
+    });
+
+    it("distinguishes clearing a field from leaving it alone", async () => {
+      const { repository, transition } = await seedPair();
+      await repository.updateTransition(workspaceId, transition.id, {
+        bars: 16,
+        notes: "ride the low end",
+      });
+
+      // An explicit null clears; an absent key does not.
+      const cleared = (await repository.updateTransition(workspaceId, transition.id, {
+        bars: null,
+      })) as Exclude<Awaited<ReturnType<GraphRepository["updateTransition"]>>, string>;
+
+      expect(cleared.bars).toBeNull();
+      expect(cleared.notes).toBe("ride the low end");
+    });
+
+    it("leaves the score snapshot alone when the technique changes", async () => {
+      const { repository, transition } = await seedPair();
+
+      const updated = (await repository.updateTransition(workspaceId, transition.id, {
+        technique: "cut",
+      })) as Exclude<Awaited<ReturnType<GraphRepository["updateTransition"]>>, string>;
+
+      expect(updated.technique).toBe("cut");
+      // §10.2: the score is a snapshot with the algorithm version that made
+      // it. Technique is not an input to `scoreTransition`, so re-deriving it
+      // here would restate a claim nobody asked to have restated.
+      expect(Number(updated.score)).toBe(0.8);
+      expect(updated.scoreAlgorithm).toBe(1);
+    });
+
+    it("refuses a technique another live transition on the pair already uses", async () => {
+      const { repository, a, b, transition } = await seedPair();
+      // A second, parallel route between the same two tracks. Legal: technique
+      // is part of the uniqueness key.
+      await repository.createTransition(
+        workspaceId,
+        { fromTrackId: a, toTrackId: b, technique: "cut", tags: [] },
+        null,
+      );
+
+      expect(await repository.updateTransition(workspaceId, transition.id, { technique: "cut" }))
+        .toBe("technique-taken");
+
+      // And the refused edit changed nothing.
+      const row = await db().transition.findUnique({ where: { id: transition.id } });
+      expect(row?.technique).toBe("blend");
+      expect(await repository.listTransitions(workspaceId)).toHaveLength(2);
+    });
+
+    it("allows a technique a soft-deleted transition was holding", async () => {
+      const { repository, a, b, transition } = await seedPair();
+      const stale = await repository.createTransition(
+        workspaceId,
+        { fromTrackId: a, toTrackId: b, technique: "cut", tags: [] },
+        null,
+      );
+      await repository.deleteTransition(workspaceId, stale!.id);
+
+      // Nothing on the canvas corresponds to the deleted row, so refusing here
+      // would block an edit for a reason the user cannot see or act on.
+      const updated = await repository.updateTransition(workspaceId, transition.id, {
+        technique: "cut",
+      });
+
+      expect(updated).not.toBe("technique-taken");
+      expect((updated as Exclude<typeof updated, string>).technique).toBe("cut");
+      expect(await repository.listTransitions(workspaceId)).toHaveLength(1);
+    });
+
+    it("accepts a no-op technique that matches what is already stored", async () => {
+      const { repository, transition } = await seedPair();
+
+      // Same value, so there is no collision to detect — the row would
+      // otherwise find *itself* holding the slot and refuse.
+      const updated = await repository.updateTransition(workspaceId, transition.id, {
+        technique: "blend",
+        notes: "unchanged technique, new note",
+      });
+
+      expect(updated).not.toBe("technique-taken");
+      expect((updated as Exclude<typeof updated, string>).notes).toBe(
+        "unchanged technique, new note",
+      );
+    });
+
+    it("will not update a transition in another workspace", async () => {
+      const { repository, transition } = await seedPair();
+      const other = await seedWorkspace(db());
+
+      expect(
+        await repository.updateTransition(other.workspaceId, transition.id, { bars: 8 }),
+      ).toBe("not-found");
+
+      const row = await db().transition.findUnique({ where: { id: transition.id } });
+      expect(row?.bars).toBeNull();
+    });
+
+    it("will not update a soft-deleted transition", async () => {
+      const { repository, transition } = await seedPair();
+      await repository.deleteTransition(workspaceId, transition.id);
+
+      expect(await repository.updateTransition(workspaceId, transition.id, { bars: 8 })).toBe(
+        "not-found",
+      );
+    });
+  });
 });

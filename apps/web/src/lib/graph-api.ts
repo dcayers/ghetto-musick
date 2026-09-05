@@ -59,6 +59,20 @@ export class GraphConflictError extends ApiError {
   }
 }
 
+/**
+ * A technique change that collides with another edge on the same pair.
+ *
+ * Separate from `GraphConflictError` because the recovery is different: this
+ * one is not stale state and a reload does not resolve it. The caller has to
+ * roll its own edit back and say why.
+ */
+export class TransitionConflictError extends ApiError {
+  constructor(message = "Those tracks are already connected with that technique.") {
+    super(message, 409);
+    this.name = "TransitionConflictError";
+  }
+}
+
 function fail(status: number, fallback: string, error: unknown): never {
   const message =
     typeof error === "object" && error && "message" in error
@@ -146,6 +160,46 @@ export async function createTransition(input: {
     },
   });
   if (error || !data) fail(response.status, "Failed to create transition", error);
+  return data;
+}
+
+/**
+ * Refines a transition — plan §8.3.
+ *
+ * `bars` and `notes` are sent when present and `null` when explicitly
+ * cleared, matching the contract's `nullish`: omitting a field leaves it
+ * alone, so a patch of `{ bars: 32 }` must not blank the notes.
+ *
+ * A 409 here is deliberately *not* routed through `fail`. Its 409 branch
+ * raises `GraphConflictError`, which the store answers by reloading the graph
+ * — the right move for a stale layout version, and the wrong one here. This
+ * conflict means the technique is taken on that pair; reloading would show
+ * the user the same two edges and lose their edit while implying the problem
+ * was staleness.
+ */
+export async function updateTransition(
+  transitionId: string,
+  patch: {
+    technique?: TransitionTechnique;
+    bars?: number | null;
+    notes?: string | null;
+    tags?: string[];
+  },
+): Promise<TransitionDto> {
+  const { data, error, response } = await api.PATCH("/v1/transitions/{transitionId}", {
+    params: { path: { transitionId } },
+    body: patch,
+  });
+  if (error || !data) {
+    if (response.status === 409) {
+      throw new TransitionConflictError(
+        typeof error === "object" && error && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "Those tracks are already connected with that technique.",
+      );
+    }
+    fail(response.status, "Failed to update transition", error);
+  }
   return data;
 }
 

@@ -33,16 +33,24 @@ const STREAMING_TRACK = FIXTURE_TRACKS.find((entry) => !entry.local)!;
 test.describe.configure({ mode: "serial" });
 
 /**
- * The one console error this app produces on purpose.
+ * The console errors this app produces on purpose.
  *
- * There is no `/v1/me` endpoint, so `main.tsx` probes the session by making a
- * real request and reading 401 as "signed out". The browser logs the failed
- * response whatever the app does with it, so every load before sign-in emits
- * one. Filtering it is the difference between a check that catches React key
+ * Both are the browser's own "failed to load resource" line, which it writes
+ * for every non-2xx response whatever the app then does with it — so neither
+ * says anything about whether the failure was handled.
+ *
+ * - **401**: there is no `/v1/me` endpoint, so `main.tsx` probes the session by
+ *   making a real request and reading 401 as "signed out". Every load before
+ *   sign-in emits one.
+ * - **409**: the conflict step provokes one deliberately. That it was handled —
+ *   surfaced to the user and rolled back — is asserted there, which is where
+ *   that claim belongs; here it would only ever be asserted by accident.
+ *
+ * Filtering them is the difference between a check that catches React key
  * warnings and unhandled rejections, and one that is switched off within a
  * week for crying wolf.
  */
-const EXPECTED_CONSOLE_NOISE = [/401 \(Unauthorized\)/];
+const EXPECTED_CONSOLE_NOISE = [/401 \(Unauthorized\)/, /409 \(Conflict\)/];
 
 /** Collects console errors so the journey can assert it produced none. */
 function collectConsoleErrors(page: Page): string[] {
@@ -154,6 +162,105 @@ test.describe("planning a set from a Serato library", () => {
 
     await page.reload();
     await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  });
+
+  test("refining a transition persists technique, length, and notes", async () => {
+    // The step the API had no endpoint for until now: a transition is
+    // quick-created with a default technique (§10.1) and refined afterwards.
+    // Worth an end-to-end assertion because the refinement crosses every seam
+    // at once — a debounced store queue, a PATCH whose absent fields must not
+    // clear the ones it omits, and a reload that rebuilds from the database.
+
+    // The edge's own label, not the path underneath it: the label sits on top
+    // and takes the pointer events, and it is also the control a keyboard user
+    // reaches, so clicking it is what a person actually does.
+    const edgeLabel = page.locator(".react-flow__edgelabel-renderer button").first();
+
+    // An unrefined transition has no length, and the label has to leave it out
+    // rather than interpolate the null — this read "…, null bars" aloud until
+    // this test caught it. Asserted on the whole page because the edge carries
+    // *two* accessible names, built independently in two files, and fixing one
+    // is exactly the mistake this catches.
+    expect(await page.locator('[aria-label*="null bars"]').count()).toBe(0);
+    await edgeLabel.click();
+
+    await page.getByRole("button", { name: /transition technique/i }).click();
+    await page.getByRole("option", { name: "Cut" }).click();
+
+    await page.getByRole("button", { name: /edit transition notes/i }).click();
+    const notes = page.getByRole("textbox", { name: /transition notes/i });
+    await notes.fill("Slam it on the one.");
+    await notes.press("Enter");
+
+    // Enter, not just a fill: the number field commits on blur or Enter rather
+    // than per keystroke, so typing alone never reaches the store.
+    const bars = page.getByRole("textbox", { name: /mix duration in bars/i });
+    await bars.fill("16");
+    await bars.press("Enter");
+
+    // The store debounces edits into one request, so the reload waits for the
+    // save rather than for the keystroke — otherwise this passes on a fast
+    // machine and fails on a slow one, which is worse than just failing.
+    await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.reload();
+
+    // Read off the canvas before opening anything: the edge label is rebuilt
+    // from the database, so a length there is proof the round trip landed.
+    await expect(page.locator(".react-flow__edgelabel-renderer button").first()).toHaveAttribute(
+      "aria-label",
+      /16 bars/,
+    );
+
+    await page.locator(".react-flow__edgelabel-renderer button").first().click();
+
+    // All three together: a patch that saved the technique but silently blanked
+    // the note would satisfy either assertion alone.
+    await expect(page.getByText("Slam it on the one.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /transition technique/i })).toContainText(
+      "Cut",
+    );
+    await expect(page.getByRole("textbox", { name: /mix duration in bars/i })).toHaveValue(
+      "16",
+    );
+  });
+
+  test("a technique already used on the pair is refused, and the edit rolls back", async () => {
+    // Technique is half the uniqueness key, so renaming an edge onto a
+    // technique its neighbour already uses is a server-side conflict. The
+    // branch matters because getting it wrong loses the user's edit silently:
+    // the change shows on screen, the write fails, and nothing says so.
+    //
+    // A second route between the same pair, which is legal precisely because
+    // technique is part of the key. The technique here is whatever the scorer
+    // proposes — deliberately not asserted, since it is a scoring detail and
+    // all this step needs is that it differs from the "Cut" above.
+    await page.getByText(LOCAL_TRACK.title, { exact: false }).first().click();
+    await page.getByRole("button", { name: /connect tracks/i }).click();
+    await page
+      .locator(".react-flow__node")
+      .filter({ hasText: STREAMING_TRACK.title })
+      .click();
+    await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+
+    const second = page.getByRole("button", { name: /transition technique/i });
+    const before = await second.textContent();
+    expect(before).not.toBe("Cut");
+
+    await second.click();
+    await page.getByRole("option", { name: "Cut" }).click();
+
+    // Said out loud, not just coloured — the server refused and the user has
+    // to know before they walk away believing it saved.
+    await expect(page.getByText(/Failed:.*already connected with that technique/i)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // And the optimistic edit is undone, so the inspector is not left showing
+    // a technique that exists nowhere but this tab.
+    await expect(second).toHaveText(before!);
   });
 
   test("tracks can be added to the set and reordered, and the order persists", async () => {

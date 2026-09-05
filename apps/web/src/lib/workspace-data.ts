@@ -140,12 +140,7 @@ export interface WorkspaceTransition extends TransitionInput {
    * scoring pass has run over the pair.
    */
   readonly confidence: number | null;
-  /**
-   * Mix length, in bars — the unit DJs actually plan in.
-   *
-   * Null on a live transition: the API models technique, notes, and tags, but
-   * has no bar-length column, so there is nothing to read one from yet.
-   */
+  /** Mix length, in bars — the unit DJs actually plan in. Null until chosen. */
   readonly bars: number | null;
   readonly mixOutCueId: string | null;
   readonly mixInCueId: string | null;

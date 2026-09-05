@@ -3,6 +3,7 @@ import type {
   AddGraphNodeInput,
   CreateGraphInput,
   CreateTransitionInput,
+  UpdateTransitionInput,
   UpdateLayoutInput,
 } from "@flowgraph/contracts";
 import { newId } from "@flowgraph/contracts";
@@ -171,6 +172,72 @@ export class GraphRepository {
       },
       // Re-drawing an existing edge revives it rather than erroring.
       update: { deletedAt: null, tags: input.tags, notes: input.notes ?? null },
+    });
+  }
+
+  /**
+   * Refines an existing transition — plan §8.3, §10.1.
+   *
+   * The awkward part is that technique is half of the uniqueness key
+   * `(workspaceId, fromTrackId, toTrackId, technique)`, so changing it can
+   * collide with another edge on the same pair. Two collisions are possible
+   * and they are not the same situation:
+   *
+   * - A **live** transition already uses that technique. The canvas is
+   *   drawing both edges, the user can see them, and merging them silently
+   *   would destroy one. Reported as a conflict.
+   * - A **soft-deleted** transition holds the slot. Nothing on screen
+   *   corresponds to it, so a conflict here would refuse an edit for a reason
+   *   the user cannot see or act on. `createTransition` already treats such
+   *   rows as reusable — it revives them — so the established rule in this
+   *   module is that a deleted row does not own its slot forever. The row is
+   *   dropped and the edit proceeds.
+   *
+   * The purge is safe only while nothing references a transition id: the
+   * §7.3 `SetItemTransition` join is not built yet. When it lands, this needs
+   * to become a soft merge, or the constraint needs to become a partial index
+   * over `deletedAt IS NULL` — which is the real fix, and is deferred here
+   * because Prisma cannot target a partial index from `upsert`.
+   */
+  async updateTransition(
+    workspaceId: string,
+    transitionId: string,
+    input: UpdateTransitionInput,
+  ): Promise<Transition | "not-found" | "technique-taken"> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.transition.findFirst({
+        where: { id: transitionId, workspaceId, deletedAt: null },
+      });
+      if (!existing) return "not-found";
+
+      if (input.technique !== undefined && input.technique !== existing.technique) {
+        const blocker = await tx.transition.findUnique({
+          where: {
+            workspaceId_fromTrackId_toTrackId_technique: {
+              workspaceId,
+              fromTrackId: existing.fromTrackId,
+              toTrackId: existing.toTrackId,
+              technique: input.technique,
+            },
+          },
+          select: { id: true, deletedAt: true },
+        });
+
+        if (blocker && blocker.deletedAt === null) return "technique-taken";
+        if (blocker) await tx.transition.delete({ where: { id: blocker.id } });
+      }
+
+      return tx.transition.update({
+        where: { id: transitionId },
+        data: {
+          ...(input.technique !== undefined ? { technique: input.technique } : {}),
+          // `nullish` in the contract means "absent leaves it alone, explicit
+          // null clears it" — two intents a single `??` would collapse.
+          ...(input.bars !== undefined ? { bars: input.bars } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.tags !== undefined ? { tags: input.tags } : {}),
+        },
+      });
     });
   }
 

@@ -55,6 +55,7 @@ const transitionDto: TransitionDto = {
   technique: "long-blend",
   notes: null,
   tags: [],
+  bars: 32,
   score: 0.633,
   scoreAlgorithm: 1,
   createdAt: "2026-09-05T00:00:00.000Z",
@@ -147,8 +148,14 @@ describe("adaptTransition", () => {
     expect(adaptTransition({ ...transitionDto, score: null }).confidence).toBeNull();
   });
 
-  it("leaves the bar length null, since the API stores none", () => {
-    expect(adaptTransition(transitionDto).bars).toBeNull();
+  it("carries the planned bar length through", () => {
+    expect(adaptTransition(transitionDto).bars).toBe(32);
+  });
+
+  it("keeps an undecided bar length null rather than zero", () => {
+    // Zero would render as "0 bars" — a claim that the mix is instant, which
+    // is a cut, not an absent value.
+    expect(adaptTransition({ ...transitionDto, bars: null }).bars).toBeNull();
   });
 
   it("maps absent notes to the empty string the inspector edits", () => {

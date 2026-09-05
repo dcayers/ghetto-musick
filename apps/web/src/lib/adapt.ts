@@ -90,8 +90,9 @@ export function adaptTransition(dto: TransitionDto): WorkspaceTransition {
     // `score` is the deterministic ranking the domain produced at authoring
     // time — the same quantity `confidence` renders.
     confidence: dto.score,
-    // No column for any of these yet.
-    bars: null,
+    bars: dto.bars,
+    // No column for either of these yet: binding a mix point to a cue needs
+    // the §8.4 marker endpoints, which are not built.
     mixOutCueId: null,
     mixInCueId: null,
     fx: [],

@@ -29,6 +29,7 @@ import {
   addNode as addNodeRequest,
   createTransition as createTransitionRequest,
   deleteTransition as deleteTransitionRequest,
+  updateTransition as updateTransitionRequest,
   getGraph,
   removeNode as removeNodeRequest,
   saveLayout,
@@ -468,15 +469,171 @@ async function reloadGraph(graphId: string, message: string): Promise<void> {
 }
 
 /**
- * Said once per session, not once per edit.
+ * Pending transition refinements, coalesced per transition — plan §8.3.
  *
- * Transition attributes — technique, bar length, notes — have no PATCH
- * endpoint yet (§8.3 defines create and delete only), so those edits live in
- * memory. The store still applies them, because refusing the edit would be a
- * worse answer than an honest one, but the workspace has to say so rather than
- * showing an indicator that can never reach "saved".
+ * Debounced for the same reason the layout batch is: `bars` is a number
+ * input, so typing "32" is two changes and holding a stepper is many, and a
+ * PATCH per keystroke would be both wasteful and racy. Several edits to one
+ * transition merge into a single request carrying the latest value of each
+ * field, which also means changing technique and then bars costs one round
+ * trip rather than two.
+ *
+ * `rollback` holds the values as they were before the *first* queued edit,
+ * not the previous one. If a merged patch is rejected the whole burst has to
+ * come back, and undoing only the last keystroke would leave the row showing
+ * something the user never typed and the server never stored.
  */
-let warnedAboutTransitionEdits = false;
+const TRANSITION_PATCH_DEBOUNCE_MS = 500;
+
+interface TransitionPatch {
+  technique?: TransitionTechnique;
+  bars?: number | null;
+  notes?: string | null;
+}
+
+/**
+ * Applies a wire patch to a workspace row.
+ *
+ * Field by field rather than a spread: under `exactOptionalPropertyTypes` a
+ * spread of optional keys writes `undefined` over values that are not
+ * optional here. It also has to translate — `notes` is nullable on the wire
+ * and always a string in the workspace, where null means "no note", not "the
+ * note is missing".
+ */
+function applyTransitionPatch(
+  tx: WorkspaceTransition,
+  patch: TransitionPatch,
+): WorkspaceTransition {
+  return {
+    ...tx,
+    ...(patch.technique !== undefined ? { technique: patch.technique } : {}),
+    ...(patch.bars !== undefined ? { bars: patch.bars } : {}),
+    ...(patch.notes !== undefined ? { notes: patch.notes ?? "" } : {}),
+  };
+}
+
+interface PendingTransitionEdit {
+  patch: TransitionPatch;
+  rollback: Partial<WorkspaceTransition>;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const pendingTransitionEdits = new Map<string, PendingTransitionEdit>();
+const transitionPatchesInFlight = new Set<string>();
+
+/** The fields this endpoint can persist. Anything else is presentation-only. */
+const PATCHABLE: readonly (keyof TransitionPatch)[] = ["technique", "bars", "notes"];
+
+function queueTransitionPatch(
+  transitionId: string,
+  patch: Partial<WorkspaceTransition>,
+  before: WorkspaceTransition,
+): void {
+  const existing = pendingTransitionEdits.get(transitionId);
+  const entry: PendingTransitionEdit = existing ?? { patch: {}, rollback: {}, timer: null };
+
+  for (const field of PATCHABLE) {
+    if (!(field in patch)) continue;
+    // First edit of this field in the burst owns the rollback value.
+    if (!(field in entry.rollback)) {
+      Object.assign(entry.rollback, { [field]: before[field] });
+    }
+    Object.assign(entry.patch, { [field]: patch[field] });
+  }
+
+  if (Object.keys(entry.patch).length === 0) return;
+  pendingTransitionEdits.set(transitionId, entry);
+
+  // A transition whose create is still open has no server id to patch. The
+  // create's success handler flushes the queue once it knows the real id.
+  if (transitionId.startsWith(TEMP_TRANSITION_PREFIX)) return;
+
+  if (entry.timer !== null) clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => {
+    entry.timer = null;
+    void flushTransitionPatch(transitionId);
+  }, TRANSITION_PATCH_DEBOUNCE_MS);
+}
+
+async function flushTransitionPatch(transitionId: string): Promise<void> {
+  const entry = pendingTransitionEdits.get(transitionId);
+  if (!entry) return;
+
+  // Serialized per transition: two overlapping PATCHes on one row can be
+  // applied out of order, and the loser would silently win.
+  if (transitionPatchesInFlight.has(transitionId)) {
+    entry.timer = setTimeout(() => {
+      entry.timer = null;
+      void flushTransitionPatch(transitionId);
+    }, TRANSITION_PATCH_DEBOUNCE_MS);
+    return;
+  }
+
+  pendingTransitionEdits.delete(transitionId);
+  transitionPatchesInFlight.add(transitionId);
+  useWorkspace.setState({ saveState: "saving" });
+
+  try {
+    const updated = adaptTransition(await updateTransitionRequest(transitionId, entry.patch));
+    useWorkspace.setState((state) => ({
+      transitions: state.transitions.map((tx) =>
+        tx.id === transitionId
+          ? {
+              ...tx,
+              // Named field by field rather than spreading the whole adapted
+              // row. `adaptTransition` fills the columns the API does not have
+              // — cue bindings, FX — with nulls and empties, so a wholesale
+              // spread would not "keep" them, it would erase them.
+              technique: updated.technique,
+              bars: updated.bars,
+              notes: updated.notes,
+              // Conditional because `tags` is optional here: writing an
+              // explicit `undefined` over it is a different thing from
+              // leaving it alone, and only one of them typechecks.
+              ...(updated.tags !== undefined ? { tags: updated.tags } : {}),
+            }
+          : tx,
+      ),
+      saveState: "saved",
+    }));
+  } catch (error) {
+    useWorkspace.setState((state) => ({
+      transitions: state.transitions.map((tx) =>
+        tx.id === transitionId ? { ...tx, ...entry.rollback } : tx,
+      ),
+      saveState: "saved",
+    }));
+    useWorkspace
+      .getState()
+      .announceFailure(
+        error instanceof Error ? error.message : "Could not save that transition.",
+      );
+  } finally {
+    transitionPatchesInFlight.delete(transitionId);
+  }
+}
+
+/** Forgets a queued refinement, for a transition that is being removed. */
+function discardTransitionPatch(transitionId: string): void {
+  const entry = pendingTransitionEdits.get(transitionId);
+  if (entry?.timer != null) clearTimeout(entry.timer);
+  pendingTransitionEdits.delete(transitionId);
+}
+
+/**
+ * Moves a draft's queued edits onto the id the server just assigned.
+ *
+ * Without this, refining a transition in the moment between drawing it and
+ * the create returning would apply on screen and never be sent — the swap
+ * replaces the draft row wholesale.
+ */
+function rekeyTransitionPatch(tempId: string, realId: string): void {
+  const entry = pendingTransitionEdits.get(tempId);
+  if (!entry) return;
+  pendingTransitionEdits.delete(tempId);
+  pendingTransitionEdits.set(realId, { ...entry, timer: null });
+  void flushTransitionPatch(realId);
+}
 
 /* ------------------------------------------------------------------ store -- */
 
@@ -885,13 +1042,20 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         }
 
         set((state) => ({
-          transitions: state.transitions.map((tx) => (tx.id === tempId ? created : tx)),
+          transitions: state.transitions.map((tx) =>
+            // Queued edits are re-applied over the server row: the user made
+            // them after this create was sent, so they are the newer claim.
+            tx.id === tempId
+              ? applyTransitionPatch(created, pendingTransitionEdits.get(tempId)?.patch ?? {})
+              : tx,
+          ),
           // Follow the id, so an inspector opened on the draft stays open on
           // the real row rather than emptying out when the swap lands.
           selectedTransitionId:
             state.selectedTransitionId === tempId ? created.id : state.selectedTransitionId,
           saveState: "saved",
         }));
+        rekeyTransitionPatch(tempId, created.id);
       } catch (error) {
         set((state) => ({
           transitions: state.transitions.filter((tx) => tx.id !== tempId),
@@ -1034,6 +1198,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     const removed = before.transitions.find((tx) => tx.id === transitionId);
     if (!removed) return;
 
+    // Drop any queued refinement first. Patching a row that is on its way out
+    // fails with a 404 and reports "could not save that transition" about an
+    // edit the user already superseded by deleting the whole thing.
+    discardTransitionPatch(transitionId);
+
     set((state) => ({
       transitions: state.transitions.filter((tx) => tx.id !== transitionId),
       selectedTransitionId: null,
@@ -1069,18 +1238,19 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   },
 
   updateTransition: (transitionId, patch) => {
+    const before = get().transitions.find((tx) => tx.id === transitionId);
+    if (!before) return;
+
+    const live = get().source === "live";
     set((state) => ({
       transitions: state.transitions.map((tx) =>
         tx.id === transitionId ? { ...tx, ...patch } : tx,
       ),
-      saveState: "unsaved",
+      saveState: live ? "saving" : "unsaved",
     }));
 
-    if (get().source !== "live" || warnedAboutTransitionEdits) return;
-    warnedAboutTransitionEdits = true;
-    get().announce(
-      "Transition details are not saved yet — the API has no endpoint to update them.",
-    );
+    if (!live) return;
+    queueTransitionPatch(transitionId, patch, before);
   },
 
   setBoothOpen: (boothOpen) => set({ boothOpen }),

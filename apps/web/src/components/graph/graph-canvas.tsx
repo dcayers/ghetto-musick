@@ -256,7 +256,13 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
       source: sourceNodeId,
       target: targetNodeId,
       selected: transition.id === selectedTransitionId,
-      ariaLabel: `${techniqueSpec(transition.technique).label}${endpoints}, ${transition.bars} bars`,
+      // The length is omitted when it has not been chosen: interpolating the
+      // null announced "…, null bars" on every unrefined transition. Same rule
+      // as the edge label in `transition-edge.tsx`, which React Flow renders
+      // over this one.
+      ariaLabel:
+        `${techniqueSpec(transition.technique).label}${endpoints}` +
+        (transition.bars === null ? "" : `, ${transition.bars} bars`),
       // Alternatives must stay clickable at their thin weight, so the hit area
       // is widened well past the stroke.
       interactionWidth: 18,

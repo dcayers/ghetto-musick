@@ -39,6 +39,7 @@ import {
   updateLayoutSchema,
   nodeIdParamSchema,
   createTransitionSchema,
+  updateTransitionSchema,
   transitionIdParamSchema,
   suggestQuerySchema,
   graphSchema,
@@ -53,10 +54,12 @@ import {
   type AddGraphNodeInput,
   type UpdateLayoutInput,
   type CreateTransitionInput,
+  type UpdateTransitionInput,
 } from "@flowgraph/contracts";
 import {
   GraphNotFoundError,
   SelfTransitionError,
+  TransitionTechniqueTakenError,
   TrackNotInWorkspaceError,
   type GraphService,
 } from "./graph.service.js";
@@ -76,6 +79,7 @@ const addNodeBody = validator(addGraphNodeSchema);
 const layoutBody = validator(updateLayoutSchema);
 const nodeIdParam = validator(nodeIdParamSchema);
 const createTransitionBody = validator(createTransitionSchema);
+const updateTransitionBody = validator(updateTransitionSchema);
 const transitionIdParam = validator(transitionIdParamSchema);
 const suggestQuery = validator(suggestQuerySchema);
 
@@ -246,6 +250,38 @@ export class GraphController {
     return this.translate(() => this.graphs.createTransition(workspaceId, body));
   }
 
+  @Patch("/transitions/:transitionId")
+  @ApiOperation({
+    summary: "Refine a transition",
+    description:
+      "Updates technique, planned bars, notes, or tags on an existing " +
+      "transition — the refinement half of quick-create. Endpoints are not " +
+      "editable: re-pointing an edge is a different transition with a " +
+      "different score. The stored score is left untouched, because no " +
+      "editable field is an input to it.",
+  })
+  @ApiParam({ name: "transitionId", type: "string", description: "Transition UUID." })
+  @ApiBody({ description: "Fields to change.", schema: updateTransitionSchema })
+  @ApiOkResponse({ description: "Transition updated.", schema: transitionSchema })
+  @ApiBadRequestResponse({ description: "Invalid or empty body.", schema: errorResponseSchema })
+  @ApiNotFoundResponse({ description: "No such transition.", schema: errorResponseSchema })
+  @ApiConflictResponse({
+    description: "Another transition between these tracks already uses that technique.",
+    schema: errorResponseSchema,
+  })
+  @ApiUnauthorizedResponse({ description: "No valid session.", schema: errorResponseSchema })
+  @ApiForbiddenResponse({ description: "No workspace.", schema: errorResponseSchema })
+  async updateTransition(
+    @Param(transitionIdParam) params: { transitionId: string },
+    @Body(updateTransitionBody) body: UpdateTransitionInput,
+    @Req() request: FastifyRequest,
+  ) {
+    const { workspaceId } = await this.requireWorkspace(request);
+    return this.translate(() =>
+      this.graphs.updateTransition(workspaceId, params.transitionId, body),
+    );
+  }
+
   @Delete("/transitions/:transitionId")
   @HttpCode(204)
   @ApiOperation({
@@ -312,7 +348,10 @@ export class GraphController {
       if (error instanceof SelfTransitionError) {
         throw new BadRequestException(error.message);
       }
-      if (error instanceof GraphVersionConflictError) {
+      if (
+        error instanceof GraphVersionConflictError ||
+        error instanceof TransitionTechniqueTakenError
+      ) {
         throw new ConflictException(error.message);
       }
       throw error;
