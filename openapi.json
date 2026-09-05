@@ -46,13 +46,16 @@
                       "type": "string"
                     },
                     "bpm": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "keySignature": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "timeSignature": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "tags": {
                       "type": "array",
@@ -475,13 +478,16 @@
                             "type": "string"
                           },
                           "bpm": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "keySignature": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "timeSignature": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "tags": {
                             "type": "array",
@@ -509,7 +515,8 @@
                       }
                     },
                     "nextCursor": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "additionalProperties": false
@@ -899,13 +906,16 @@
                       "type": "string"
                     },
                     "bpm": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "keySignature": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "timeSignature": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "tags": {
                       "type": "array",
@@ -2084,13 +2094,16 @@
                                 "type": "string"
                               },
                               "bpm": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "keySignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "timeSignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "tags": {
                                 "type": "array",
@@ -2162,7 +2175,8 @@
                             "type": "string"
                           },
                           "notes": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "tags": {
                             "type": "array",
@@ -2171,12 +2185,14 @@
                             }
                           },
                           "score": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "scoreAlgorithm": {
                             "type": "integer",
                             "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
+                            "maximum": 9007199254740991,
+                            "nullable": true
                           },
                           "createdAt": {
                             "type": "string",
@@ -2570,13 +2586,16 @@
                           "type": "string"
                         },
                         "bpm": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "keySignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "timeSignature": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "tags": {
                           "type": "array",
@@ -3814,7 +3833,8 @@
                       "type": "string"
                     },
                     "notes": {
-                      "type": "string"
+                      "type": "string",
+                      "nullable": true
                     },
                     "tags": {
                       "type": "array",
@@ -3823,12 +3843,14 @@
                       }
                     },
                     "score": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "scoreAlgorithm": {
                       "type": "integer",
                       "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
+                      "maximum": 9007199254740991,
+                      "nullable": true
                     },
                     "createdAt": {
                       "type": "string",
@@ -4667,13 +4689,16 @@
                                 "type": "string"
                               },
                               "bpm": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "keySignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "timeSignature": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "tags": {
                                 "type": "array",
@@ -4708,10 +4733,12 @@
                             "maximum": 9007199254740991
                           },
                           "harmonicRelation": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "pitchAdjustment": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "warnings": {
                             "type": "array",

@@ -27,6 +27,7 @@ The following was established empirically against `@riktajs/core@0.12.0` before 
 2. **Default error responses leak stack traces.** A validation failure returns HTTP 400 with a full `stack` string in the JSON body, including absolute filesystem paths. This must be disabled outside development.
 3. **Property-based `@Autowired()` requires `emitDecoratorMetadata`.** Without it — for example under esbuild/tsx — resolution fails with "could not infer type". Explicit tokens (`@Autowired(TrackService)`) work regardless of transpiler.
 4. **Rikta uses its own bundled Fastify.** Request handling runs through `fastify@5.3.2` nested under `@riktajs/core`, not any app-level Fastify. Pinning Fastify at the app level has no effect.
+5. **`@riktajs/swagger` drops `nullable` from generated schemas.** It asks Zod for OpenAPI 3.0 JSON Schema — which is correct, `nullable: true` included — and then re-copies that result through a property whitelist that has no `nullable` entry, so the flag is discarded on the way out. `bpm: z.number().nullable()` reaches the document as `{"type": "number"}`. Nothing else is lost: unions still arrive as `anyOf`, and the library's own `OpenApiSchemaObject` type declares `nullable`, so this is an omitted whitelist entry rather than a design choice. It matters because the document is the contract of record — `openapi-typescript` faithfully turned the wrong document into `bpm: number`, and any consumer trusting that crashes on the null the API genuinely returns for a track with no analysed tempo.
 
 ## Decision
 
@@ -43,6 +44,7 @@ The following was established empirically against `@riktajs/core@0.12.0` before 
 7. **Do not pin Fastify at the app level** for the API (finding 4). It is misleading. Depend on what Rikta bundles and record the effective version in the lockfile.
 8. **Version bumps get their own PR**, never bundled with feature work, with the full integration suite green.
 9. **Exclude `@riktajs/*` from dependency auto-merge**; enable lockfile-diff alerts on the scope.
+10. **Restore nullability on the generated document** (finding 5), in `apps/api/src/openapi-nullability.ts`. Applied both by `generateOpenApiDocument()` and by the runtime plugin's `transform` hook, so the checked-in artifact and the served spec cannot disagree. Deliberately a post-processing step rather than pre-converting the schemas handed to each decorator: the decorator approach has to be remembered at every `@ApiOkResponse`, and the day it is forgotten the field silently loses its null again. The repair operates on plain JSON and imports no `@riktajs/*`, so unlike the binding layer it survives the exit path rather than being deleted with it.
 
 ### Exit triggers
 

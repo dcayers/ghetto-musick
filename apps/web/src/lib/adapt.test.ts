@@ -4,20 +4,19 @@ import { adaptGraph, adaptTrack, adaptTransition, mergeTracks } from "./adapt.js
 import type { GraphDetail, TransitionDto } from "./graph-api.js";
 
 /**
- * The generated types understate nullability, so fixtures are cast.
+ * Fixtures are annotated with the generated types, not cast to them.
  *
- * `@riktajs/swagger` drops `nullable` when it converts a Zod schema to
- * OpenAPI: `notes: z.string().nullable()` is emitted as `{"type": "string"}`,
- * and `openapi-typescript` faithfully turns that into `notes: string`. The API
- * really does return null for these — the contract in
- * `packages/contracts/src/*.ts` is the accurate description — so the fixtures
- * below are the true wire shape and the cast is what bridges the defect.
+ * That is load-bearing rather than tidiness. These objects are the real wire
+ * shape, nulls included, so annotating them makes the compiler check the
+ * generated client against reality: a fixture setting `bpm: null` stops
+ * compiling the moment `openapi.json` stops describing `bpm` as nullable.
+ * A regression in the contract therefore fails the build here, instead of
+ * reaching a consumer that trusted `bpm: number` and crashed on real data.
  *
- * Confined to this helper deliberately. When the document starts carrying
- * nullability, these casts become unnecessary and should be deleted; anywhere
- * else the same cast would just hide the problem.
+ * Casting instead — which this file used to do, while the document did
+ * understate nullability — silences exactly that signal.
  */
-const asWire = <T>(value: unknown): T => value as T;
+type TrackDto = GraphDetail["nodes"][number]["track"];
 
 /**
  * These tests exist to make one class of change loud.
@@ -30,7 +29,7 @@ const asWire = <T>(value: unknown): T => value as T;
  * rewritten, which is the point.
  */
 
-const trackDto = {
+const trackDto: TrackDto = {
   id: "01a07040-ab56-7000-8000-000000000001",
   workspaceId: "01a07040-0000-7000-8000-000000000000",
   title: "Awake",
@@ -43,9 +42,8 @@ const trackDto = {
   createdAt: "2026-09-05T00:00:00.000Z",
   updatedAt: "2026-09-05T00:00:00.000Z",
 };
-const trackFixture = asWire<GraphDetail["nodes"][number]["track"]>(trackDto);
 
-const transitionDto = {
+const transitionDto: TransitionDto = {
   id: "01a07046-79b2-7000-8000-000000000001",
   workspaceId: "01a07040-0000-7000-8000-000000000000",
   fromTrackId: "01a07040-ab56-7000-8000-000000000001",
@@ -58,11 +56,10 @@ const transitionDto = {
   createdAt: "2026-09-05T00:00:00.000Z",
   updatedAt: "2026-09-05T00:00:00.000Z",
 };
-const transitionFixture = asWire<TransitionDto>(transitionDto);
 
 describe("adaptTrack", () => {
   it("carries the fields the API actually stores", () => {
-    const track = adaptTrack(trackFixture);
+    const track = adaptTrack(trackDto);
 
     expect(track).toMatchObject({
       id: trackDto.id,
@@ -75,7 +72,7 @@ describe("adaptTrack", () => {
   });
 
   it("leaves every field without a column null rather than deriving one", () => {
-    const track = adaptTrack(trackFixture);
+    const track = adaptTrack(trackDto);
 
     // Not a style preference: a genre or energy derived from the id would sit
     // beside the user's real titles looking like their own metadata.
@@ -90,15 +87,15 @@ describe("adaptTrack", () => {
   });
 
   it("gives two adapted tracks the same absences, not id-derived variety", () => {
-    const first = adaptTrack(trackFixture);
-    const second = adaptTrack(asWire({ ...trackDto, id: "01a07040-ffff-7000-8000-00000000000f" }));
+    const first = adaptTrack(trackDto);
+    const second = adaptTrack({ ...trackDto, id: "01a07040-ffff-7000-8000-00000000000f" });
 
     expect(second.energy).toBe(first.energy);
     expect(second.genre).toBe(first.genre);
   });
 
   it("preserves a null tempo and key rather than substituting a number", () => {
-    const track = adaptTrack(asWire({ ...trackDto, bpm: null, keySignature: null }));
+    const track = adaptTrack({ ...trackDto, bpm: null, keySignature: null });
 
     expect(track.bpm).toBeNull();
     expect(track.keySignature).toBeNull();
@@ -107,29 +104,29 @@ describe("adaptTrack", () => {
 
 describe("adaptTransition", () => {
   it("renames the endpoints from direction of travel to edge roles", () => {
-    const transition = adaptTransition(transitionFixture);
+    const transition = adaptTransition(transitionDto);
 
     expect(transition.sourceTrackId).toBe(transitionDto.fromTrackId);
     expect(transition.targetTrackId).toBe(transitionDto.toTrackId);
   });
 
   it("carries the stored score through as confidence", () => {
-    expect(adaptTransition(transitionFixture).confidence).toBe(0.633);
+    expect(adaptTransition(transitionDto).confidence).toBe(0.633);
   });
 
   it("keeps an unscored transition unscored", () => {
     // Null is not zero. A zero confidence renders as a red 0%, which claims the
     // pairing was scored and found bad.
-    expect(adaptTransition(asWire({ ...transitionDto, score: null })).confidence).toBeNull();
+    expect(adaptTransition({ ...transitionDto, score: null }).confidence).toBeNull();
   });
 
   it("leaves the bar length null, since the API stores none", () => {
-    expect(adaptTransition(transitionFixture).bars).toBeNull();
+    expect(adaptTransition(transitionDto).bars).toBeNull();
   });
 
   it("maps absent notes to the empty string the inspector edits", () => {
-    expect(adaptTransition(transitionFixture).notes).toBe("");
-    expect(adaptTransition(asWire({ ...transitionDto, notes: "duck the mids" })).notes).toBe(
+    expect(adaptTransition(transitionDto).notes).toBe("");
+    expect(adaptTransition({ ...transitionDto, notes: "duck the mids" }).notes).toBe(
       "duck the mids",
     );
   });
@@ -137,12 +134,12 @@ describe("adaptTransition", () => {
   it("marks every stored transition as manually authored", () => {
     // There is no AI write path, so anything the API returns was authored by a
     // person. This assertion should fail the day suggestions can be persisted.
-    expect(adaptTransition(transitionFixture).origin).toBe("manual");
+    expect(adaptTransition(transitionDto).origin).toBe("manual");
   });
 });
 
 describe("adaptGraph", () => {
-  const detail = asWire<GraphDetail>({
+  const detail: GraphDetail = {
     graph: {
       id: "01a07041-eafd-7000-8000-000000000001",
       workspaceId: "01a07040-0000-7000-8000-000000000000",
@@ -161,7 +158,7 @@ describe("adaptGraph", () => {
       },
     ],
     transitions: [transitionDto],
-  });
+  };
 
   it("keeps the version, which is the token every layout write is checked against", () => {
     expect(adaptGraph(detail).graphVersion).toBe(3);
@@ -181,9 +178,9 @@ describe("adaptGraph", () => {
 });
 
 describe("mergeTracks", () => {
-  const graphTrack = adaptTrack(trackFixture);
-  const libraryTrack = adaptTrack(asWire({ ...trackDto, title: "Awake (library copy)" }));
-  const other = adaptTrack(asWire({ ...trackDto, id: "01a07040-ab91-7000-8000-000000000002" }));
+  const graphTrack = adaptTrack(trackDto);
+  const libraryTrack = adaptTrack({ ...trackDto, title: "Awake (library copy)" });
+  const other = adaptTrack({ ...trackDto, id: "01a07040-ab91-7000-8000-000000000002" });
 
   it("prefers the first list on a collision", () => {
     const merged = mergeTracks([graphTrack], [libraryTrack]);

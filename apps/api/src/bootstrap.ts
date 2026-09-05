@@ -22,6 +22,7 @@ import { GraphRepository } from "./graphs/graph.repository.js";
 import { GraphService } from "./graphs/graph.service.js";
 import { HealthService } from "./health/health.service.js";
 import { API_CONTROLLERS, OPENAPI_CONFIG } from "./openapi.js";
+import { restoreNullability } from "./openapi-nullability.js";
 
 // Resolve .env against the repo root, not the process working directory —
 // otherwise `pnpm --filter` runs from apps/api and silently finds nothing.
@@ -155,6 +156,12 @@ async function main(): Promise<void> {
   // (openapi.test.ts) rather than assumed — the two documents are built by
   // separate code paths and would otherwise drift unnoticed.
   //
+  // The plugin builds its own document rather than accepting one, so the
+  // nullability repair has to be applied here too, via the `transform` hook
+  // it provides for exactly this. Without it the served spec and the Swagger
+  // UI would keep understating nullability after the checked-in artifact
+  // stopped — the same defect, in the place people read the API by hand.
+  //
   // UI is development-only; the JSON stays available everywhere so the
   // generated client can be rebuilt against a deployed environment.
   await registerSwagger(app.server, {
@@ -164,6 +171,7 @@ async function main(): Promise<void> {
     uiPath: "/docs",
     exposeUI: !isProduction(env),
     exposeSpec: true,
+    transform: restoreNullability,
   });
 
   await app.listen();
