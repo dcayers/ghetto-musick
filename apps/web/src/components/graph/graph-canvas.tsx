@@ -607,6 +607,21 @@ function Canvas() {
         fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
+        // Viewport culling — plan §9.4 mitigation 2, ADR-0011.
+        //
+        // The pair with `SIMPLIFY_BELOW_ZOOM` rather than a duplicate of it.
+        // They cover opposite ends: zoomed out, everything is on screen but
+        // each node is a cheap chip; zoomed in, each node is a full card but
+        // almost all of them are off-viewport. Simplification answers the
+        // first, culling answers the second, and neither helps where the
+        // other does.
+        //
+        // Safe because every node carries an explicit width and height from
+        // `project`. React Flow can only decide what intersects the viewport
+        // if it knows how big things are; without measurements it renders
+        // everything anyway, so this would be an inert prop rather than a
+        // broken one.
+        onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
         // There is no remove-node action in the store, and a Delete key that
         // takes edges but leaves nodes is worse than one that does nothing.

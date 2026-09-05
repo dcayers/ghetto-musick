@@ -53,7 +53,9 @@ The gate passes at p95 6.5ms against a 16.7ms budget — about 60% headroom — 
 
 **Revisit when a real workspace approaches 2,000 nodes.** That is where the measured curve reaches the budget, and it is a concrete trigger rather than a feeling.
 
-**Mount time fails its bar and is the real problem.** 2.5 seconds to an interactive canvas at the gate size is worse for a planner than a few milliseconds of pan cost, because it is paid on every load rather than during a gesture. §9.4's mitigation list is ordered for frame rate; for mount it is viewport culling that matters, and that is now the first optimisation to reach for rather than the second.
+**Mount time fails its bar and is the real problem.** 2.5 seconds to an interactive canvas at the gate size is worse for a planner than a few milliseconds of pan cost, because it is paid on every load rather than during a gesture.
+
+> **Correction, same day.** This originally continued: "for mount it is viewport culling that matters, and that is now the first optimisation to reach for." Culling was then enabled and measured, and **mount time did not move** — see the amendment below. The prediction was wrong and the reason is obvious in hindsight: the canvas fits the whole graph to view on load, so at the exact moment mount cost is paid there is nothing off-screen to cull.
 
 ## What this does not prove
 
@@ -82,6 +84,41 @@ Stated plainly, because a performance ADR that overclaims is worse than none:
 
 **Swap to Sigma 3.0.3 pre-emptively.** WebGL rendering would remove the DOM ceiling entirely. Rejected: the measurement says the ceiling is more than twice the required size, and §9.3's decoupling means this stays cheap to do later. Doing it now would be a rewrite justified by a fear the numbers do not support.
 
-**Enable `onlyRenderVisibleElements` now.** It would improve mount time, which is the bar that actually failed. Deferred rather than rejected — it changes what the gate measures, so the unmitigated baseline above is worth having recorded first.
+**Enable `onlyRenderVisibleElements` now.** Deferred rather than rejected, so that the unmitigated baseline above was recorded first. It has since been enabled — see the amendment.
 
 **Measure presented frame times instead.** The honest measurement, and the one to use if this is ever run headed. It was not available here: `requestAnimationFrame` does not fire on a schedule in the headless pane, so an rAF probe hangs rather than reporting a slow number — a failure mode that looks exactly like a performance finding.
+
+---
+
+## Amendment (2026-09-05): viewport culling enabled
+
+`onlyRenderVisibleElements` is now on. It is the pair to `SIMPLIFY_BELOW_ZOOM` rather than a duplicate of it: zoomed out, everything is on screen but each node is a cheap chip; zoomed in, each node is a full card but almost all of them are off-viewport. Simplification answers the first, culling the second, and neither helps where the other does.
+
+### The measurement changed shape first
+
+The original numbers were taken at the opening fit-view, which is the *friendliest* state for culling to be judged in and the least representative: fit-view puts every node on screen, so nothing can be culled and the optimisation appears worthless. The harness now measures at two viewports per scene — fit-view, and a zoom a person would actually work at — and the gate is judged on the worse of them.
+
+That second state also turned out to be the heavier one before culling. At scale 1 the nodes render full detail rather than simplified chips, so the DOM was **82,653 elements against fit-view's 33,510** — the state the original measurement never visited.
+
+### Result at 1,000 nodes / 2,934 edges
+
+| | DOM elements | Nodes in DOM | Pan p95 | Zoom p95 |
+|---|---|---|---|---|
+| Working zoom, before | 82,653 | 1,000 | 8.1ms | 11.7ms |
+| Working zoom, after | **4,926** | **42** | **2.1ms** | **1.5ms** |
+| Fit view, before | 33,510 | 1,000 | 8.9ms | 10.0ms |
+| Fit view, after | 32,001 | 936 | 9.9ms | 12.7ms |
+
+Roughly **17× fewer DOM elements and 4–8× faster interaction** where a planner actually works. At fit-view the change is within run-to-run noise in both directions, which is the expected result when there is nothing off-screen to skip.
+
+### Mount time is unchanged, and that falsifies the prediction above
+
+2,471 / 2,542 / 2,501ms with culling, against 2,669 / 2,524 / 2,509ms without. Statistically identical.
+
+The reason is that `fitView` runs on mount, so every node is inside the viewport exactly when the first render happens. Culling can only skip what is off-screen, and at that instant nothing is. **Mount remains unfixed, and the fix is not this.** The candidates are opening at a working zoom over a region rather than fitting the whole graph, or deferring node detail until after first paint — both product decisions rather than renderer flags, which is why neither is taken here.
+
+### Accepted cost: off-screen nodes leave the DOM
+
+A node outside the viewport is no longer focusable or reachable by a screen reader, where before it was — invisibly, but present. §9.9 requires keyboard and screen-reader coverage of core editing, so this is a real trade rather than a free win.
+
+It is accepted because the alternative was never usable: tabbing through a thousand invisible nodes is not a workflow, and the routes that matter still work. Selecting a track in the library or the timeline focuses it on the canvas and brings it into view, at which point it is rendered, focusable, and described. The graph is reachable through the library; it is the canvas that is now viewport-bound.

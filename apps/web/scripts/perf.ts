@@ -28,17 +28,23 @@ interface StepStats {
   viewportMoved: boolean;
 }
 
+interface Measurement {
+  label: string;
+  scale: number;
+  domNodes: number;
+  domEdges: number;
+  domElements: number;
+  pan: StepStats;
+  zoom: StepStats;
+}
+
 interface Scene {
   label: string;
   nodes: number;
   edges: number;
-  domNodes: number;
-  domEdges: number;
-  domElements: number;
   generateMs: number;
   mountMs: number;
-  pan: StepStats;
-  zoom: StepStats;
+  at: Measurement[];
 }
 
 /** 60fps. Anything above this per interaction step cannot reach it. */
@@ -86,24 +92,45 @@ async function measureScene(
   await waitForScene(page, nodes);
   const mountMs = Date.now() - startedAt;
 
-  const counts = await page.evaluate(() => ({
-    domNodes: document.querySelectorAll(".react-flow__node").length,
-    domEdges: document.querySelectorAll(".react-flow__edge").length,
-    domElements: document.querySelectorAll("*").length,
-    generateMs: Number(
+  const generateMs = await page.evaluate(() =>
+    Number(
       /generated in (\d+)ms/.exec(
         document.querySelector('[data-testid="perf-legend"]')?.textContent ?? "",
       )?.[1] ?? 0,
     ),
-  }));
+  );
 
-  // Panning first: it is the interaction a planner spends the most time in,
-  // and it is the one that keeps every node in the DOM.
-  const pan = (await page.evaluate(() => window.__perf!.pan(40))) as StepStats;
-  const zoom = (await page.evaluate(() => window.__perf!.zoom(24))) as StepStats;
+  /**
+   * Measures at whatever zoom the viewport is currently at.
+   *
+   * DOM counts are read *after* the interactions rather than before, because
+   * culling decides what to render from the viewport — a count taken at rest
+   * would miss what a pan brings into and out of the tree.
+   */
+  async function measureHere(atLabel: string): Promise<Measurement> {
+    // Panning first: it is the interaction a planner spends the most time in.
+    const pan = (await page.evaluate(() => window.__perf!.pan(40))) as StepStats;
+    const zoom = (await page.evaluate(() => window.__perf!.zoom(24))) as StepStats;
+    const counts = await page.evaluate(() => ({
+      scale: window.__perf!.scale(),
+      domNodes: document.querySelectorAll(".react-flow__node").length,
+      domEdges: document.querySelectorAll(".react-flow__edge").length,
+      domElements: document.querySelectorAll("*").length,
+    }));
+    return { label: atLabel, ...counts, pan, zoom };
+  }
+
+  const at: Measurement[] = [];
+  at.push(await measureHere("fit view — the whole graph on screen"));
+
+  // Then a zoom a person would actually work at, where most of the graph is
+  // off-screen. This is the state culling exists for, and the one the opening
+  // fit-view hides.
+  const reached = await page.evaluate(() => window.__perf!.zoomTo(1));
+  at.push(await measureHere(`working zoom — scale ${reached.toFixed(2)}`));
 
   await context.close();
-  return { label, nodes, edges, ...counts, mountMs, pan, zoom };
+  return { label, nodes, edges, generateMs, mountMs, at };
 }
 
 function report(scene: Scene): void {
@@ -117,20 +144,24 @@ function report(scene: Scene): void {
           : "OVER BUDGET";
 
   console.log(`\n── ${scene.label} ────────────────────────────────`);
-  console.log(
-    `  scene        ${scene.domNodes} nodes, ${scene.domEdges} edges in the DOM ` +
-      `(${scene.domElements.toLocaleString()} elements total)`,
-  );
   console.log(`  model build  ${scene.generateMs}ms`);
   console.log(`  ready in     ${scene.mountMs}ms from navigation`);
-  for (const [name, stats] of [
-    ["pan ", scene.pan],
-    ["zoom", scene.zoom],
-  ] as const) {
+
+  for (const measurement of scene.at) {
+    console.log(`\n  ${measurement.label}`);
     console.log(
-      `  ${name}         median ${stats.medianMs}ms · p95 ${stats.p95Ms}ms · worst ${stats.worstMs}ms ` +
-        `· ${stats.overBudgetPercent}% over 16.7ms — ${verdict(stats)}`,
+      `    in DOM     ${measurement.domNodes} nodes, ${measurement.domEdges} edges ` +
+        `(${measurement.domElements.toLocaleString()} elements)`,
     );
+    for (const [name, stats] of [
+      ["pan ", measurement.pan],
+      ["zoom", measurement.zoom],
+    ] as const) {
+      console.log(
+        `    ${name}       median ${stats.medianMs}ms · p95 ${stats.p95Ms}ms · worst ${stats.worstMs}ms ` +
+          `· ${stats.overBudgetPercent}% over 16.7ms — ${verdict(stats)}`,
+      );
+    }
   }
 }
 
@@ -167,11 +198,14 @@ async function main(): Promise<void> {
     for (const scene of scenes) report(scene);
 
     const gate = scenes.at(-1)!;
-    const failed =
-      !gate.pan.viewportMoved ||
-      !gate.zoom.viewportMoved ||
-      gate.pan.p95Ms > FRAME_BUDGET_MS * 2 ||
-      gate.zoom.p95Ms > FRAME_BUDGET_MS * 2;
+    // The gate is judged on the worst measured state, not the friendliest.
+    const failed = gate.at.some(
+      (measurement) =>
+        !measurement.pan.viewportMoved ||
+        !measurement.zoom.viewportMoved ||
+        measurement.pan.p95Ms > FRAME_BUDGET_MS * 2 ||
+        measurement.zoom.p95Ms > FRAME_BUDGET_MS * 2,
+    );
 
     console.log(
       `\n${failed ? "GATE FAILED" : "GATE PASSED"} — record the result in an ADR either way (§9.4).\n`,

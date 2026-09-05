@@ -51,6 +51,17 @@ export interface PerfProbe {
   viewport(): string;
   pan(steps?: number): Promise<StepStats>;
   zoom(steps?: number): Promise<StepStats>;
+  /**
+   * Wheels the viewport to roughly `scale`, and reports what it reached.
+   *
+   * Measuring only at the opening fit-view is misleading once culling is in
+   * play: fit-view puts every node on screen, so nothing is off-viewport to
+   * cull and the optimisation looks worthless. A DJ works at a zoom where
+   * they can read a node, and that is where culling earns its keep — so the
+   * harness has to be able to get there.
+   */
+  zoomTo(scale: number): Promise<number>;
+  scale(): number;
 }
 
 /** 60fps. The budget ADR-0011 is written against. */
@@ -101,6 +112,11 @@ function pane(): HTMLElement {
 const transform = (): string =>
   document.querySelector<HTMLElement>(".react-flow__viewport")?.style.transform ?? "";
 
+function currentScale(): number {
+  const parsed = /scale\(([\d.]+)\)/.exec(transform());
+  return parsed === null ? 1 : Number.parseFloat(parsed[1] ?? "1");
+}
+
 /**
  * A mouse event, not a pointer event.
  *
@@ -131,6 +147,34 @@ export function installProbe(): () => void {
     edgeCount: () => document.querySelectorAll(".react-flow__edge").length,
     domElements: () => document.querySelectorAll("*").length,
     viewport: transform,
+    scale: currentScale,
+
+    async zoomTo(target) {
+      const element = pane();
+      const box = element.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+
+      // Wheeled rather than set, so React Flow's own clamping and transform
+      // apply — a viewport written directly could sit outside minZoom/maxZoom
+      // and measure a state the app can never be in.
+      for (let attempt = 0; attempt < 400; attempt += 1) {
+        const scale = currentScale();
+        if (Math.abs(scale - target) / target < 0.05) break;
+        element.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            clientX: x,
+            clientY: y,
+            deltaY: scale < target ? -40 : 40,
+          }),
+        );
+        await yieldToTasks();
+      }
+      return currentScale();
+    },
 
     async pan(steps = 40) {
       const target = pane();
