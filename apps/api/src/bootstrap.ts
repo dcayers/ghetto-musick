@@ -15,11 +15,19 @@ import { createGracefulShutdown } from "./lifecycle/graceful-shutdown.js";
 import { createAuth, type Auth } from "./auth/auth.js";
 import { WorkspaceContextService } from "./auth/workspace-context.js";
 import { WorkspaceProvisioningService } from "./auth/workspace-provisioning.js";
-import { TRACK_SERVICE, HEALTH_SERVICE, WORKSPACE_CONTEXT, GRAPH_SERVICE } from "./tokens.js";
+import {
+  TRACK_SERVICE,
+  HEALTH_SERVICE,
+  WORKSPACE_CONTEXT,
+  GRAPH_SERVICE,
+  SET_SERVICE,
+} from "./tokens.js";
 import { TrackRepository } from "./tracks/track.repository.js";
 import { TrackService } from "./tracks/track.service.js";
 import { GraphRepository } from "./graphs/graph.repository.js";
 import { GraphService } from "./graphs/graph.service.js";
+import { SetRepository } from "./sets/set.repository.js";
+import { SetService } from "./sets/set.service.js";
 import { HealthService } from "./health/health.service.js";
 import { API_CONTROLLERS, OPENAPI_CONFIG } from "./openapi.js";
 
@@ -56,6 +64,7 @@ function registerProviders(prisma: PrismaClient, auth: Auth): void {
   container.registerValue(TRACK_SERVICE, new TrackService(trackRepository));
   container.registerValue(HEALTH_SERVICE, new HealthService(prisma));
   container.registerValue(GRAPH_SERVICE, new GraphService(new GraphRepository(prisma)));
+  container.registerValue(SET_SERVICE, new SetService(new SetRepository(prisma)));
   container.registerValue(WORKSPACE_CONTEXT, new WorkspaceContextService(auth, prisma));
 }
 

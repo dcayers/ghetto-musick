@@ -1,8 +1,11 @@
 import type { Track as TrackDto } from "@flowgraph/api-client";
 
 import type { GraphDetail, GraphNodeDto, TransitionDto } from "./graph-api.js";
+import type { SetDetail, SetItemDto } from "./set-api.js";
 import type {
   WorkspaceGraphNode,
+  WorkspaceSet,
+  WorkspaceSetItem,
   WorkspaceTrack,
   WorkspaceTransition,
 } from "./workspace-data.js";
@@ -121,17 +124,63 @@ export function adaptGraph(detail: GraphDetail): AdaptedGraph {
 }
 
 /**
- * Merges two track lists, preferring the first.
+ * Merges two track lists, preferring the first, keeping one entry per id.
  *
- * The graph's inline tracks and the library page overlap, and the library's
- * copy is the fuller one — it is the same row read through the same schema,
- * but fetching it is what makes a track filterable. Order is preserved so the
- * library's own sort is not disturbed.
+ * The graph's inline tracks, the set's inline tracks, and the library page all
+ * overlap. Order is preserved so the library's own sort is not disturbed.
+ *
+ * Deduplication spans *both* inputs rather than filtering the second against
+ * the first. A set may hold the same track twice (§10.4 calls these
+ * occurrences), so its inline tracks legitimately repeat — and an earlier
+ * version that only screened `additional` let those repeats through, which
+ * showed the track twice in the library and gave React two children with the
+ * same key. A track list is a set of tracks; a running order is where
+ * repetition means something.
  */
 export function mergeTracks(
   preferred: readonly WorkspaceTrack[],
   additional: readonly WorkspaceTrack[],
 ): WorkspaceTrack[] {
-  const seen = new Set(preferred.map((track) => track.id));
-  return [...preferred, ...additional.filter((track) => !seen.has(track.id))];
+  const seen = new Set<string>();
+  const merged: WorkspaceTrack[] = [];
+  for (const track of [...preferred, ...additional]) {
+    if (seen.has(track.id)) continue;
+    seen.add(track.id);
+    merged.push(track);
+  }
+  return merged;
+}
+
+/* ------------------------------------------------------------------ sets -- */
+
+export function adaptSetItem(dto: SetItemDto): WorkspaceSetItem {
+  // `rank` is deliberately dropped. It is the server's ordering mechanism, and
+  // the API already returns items in rank order — carrying it into the client
+  // would invite code that sorts or, worse, generates one.
+  return { id: dto.id, trackId: dto.trackId };
+}
+
+export interface AdaptedSet {
+  readonly set: WorkspaceSet;
+  /**
+   * Tracks carried inline by the set's own items.
+   *
+   * Same reason as the graph's: an item whose track is missing from the store
+   * renders as a gap, so the timeline must not depend on the library page
+   * having arrived.
+   */
+  readonly itemTracks: readonly WorkspaceTrack[];
+}
+
+export function adaptSet(detail: SetDetail): AdaptedSet {
+  return {
+    set: {
+      id: detail.set.id,
+      name: detail.set.name,
+      items: detail.items.map(adaptSetItem),
+      targetBpm: detail.set.targetBpm,
+      targetKey: detail.set.targetKey,
+    },
+    itemTracks: detail.items.map((item) => adaptTrack(item.track)),
+  };
 }

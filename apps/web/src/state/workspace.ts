@@ -10,7 +10,19 @@ import {
   type WorkspaceTrack,
   type WorkspaceTransition,
 } from "../lib/workspace-data.js";
-import { adaptGraph, adaptNode, mergeTracks, type AdaptedGraph } from "../lib/adapt.js";
+import {
+  adaptGraph,
+  adaptNode,
+  adaptSetItem,
+  mergeTracks,
+  type AdaptedGraph,
+  type AdaptedSet,
+} from "../lib/adapt.js";
+import {
+  addSetItem as addSetItemRequest,
+  removeSetItem as removeSetItemRequest,
+  reorderSetItem as reorderSetItemRequest,
+} from "../lib/set-api.js";
 import {
   GraphConflictError,
   addNode as addNodeRequest,
@@ -89,7 +101,29 @@ export interface LiveGraphPayload {
   readonly graph: AdaptedGraph;
   /** The library page. Merged behind the graph's own inline tracks. */
   readonly tracks: readonly WorkspaceTrack[];
+  /**
+   * The set being planned, or null when the workspace has none.
+   *
+   * Null is a real state rather than a loading one: a workspace can hold a
+   * graph and no running order, and the timeline says so.
+   */
+  readonly set: AdaptedSet | null;
 }
+
+/**
+ * The set a live workspace shows before one exists.
+ *
+ * Named rather than inlined because "no set" is rendered in three places and
+ * they must agree that it has no id — an empty set with a plausible id would
+ * accept items that then had nowhere to go.
+ */
+export const EMPTY_SET: WorkspaceSet = {
+  id: "",
+  name: "No set",
+  items: [],
+  targetBpm: null,
+  targetKey: null,
+};
 
 interface WorkspaceState {
   /* Data */
@@ -98,6 +132,8 @@ interface WorkspaceState {
   graphId: string | null;
   /** Optimistic-concurrency token for layout writes — plan §10.1. */
   graphVersion: number;
+  /** The set being edited, or null in demo mode and before one exists. */
+  setId: string | null;
   tracks: readonly WorkspaceTrack[];
   nodes: readonly WorkspaceGraphNode[];
   transitions: readonly WorkspaceTransition[];
@@ -144,6 +180,8 @@ interface WorkspaceState {
   toggleSection: (id: string, open?: boolean) => void;
   moveNode: (nodeId: string, x: number, y: number) => void;
   reorderSet: (from: number, to: number) => void;
+  addTrackToSet: (trackId: string, position?: number) => void;
+  removeSetItem: (itemId: string) => void;
   addTrackToGraph: (trackId: string, x: number, y: number) => void;
   removeTransition: (transitionId: string) => void;
   updateTransition: (transitionId: string, patch: Partial<WorkspaceTransition>) => void;
@@ -366,6 +404,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   source: "demo",
   graphId: null,
   graphVersion: 0,
+  setId: null,
   tracks: TRACKS,
   nodes: NODES,
   transitions: TRANSITIONS,
@@ -385,21 +424,22 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   status: null,
   statusId: 0,
 
-  hydrateLive: ({ graph, tracks }) => {
+  hydrateLive: ({ graph, tracks, set: liveSet }) => {
     pendingPositions.clear();
     set({
       source: "live",
       graphId: graph.graphId,
       graphVersion: graph.graphVersion,
+      setId: liveSet?.set.id ?? null,
       nodes: graph.nodes,
       transitions: graph.transitions,
-      // Graph-inline tracks first: a node whose track is absent renders as
-      // nothing, so the canvas must not depend on the library page arriving.
-      tracks: mergeTracks(graph.nodeTracks, tracks),
-      // The demo set references demo track ids that do not exist in a live
-      // workspace. Sets have no API yet (plan §25.9 step 4), so the timeline
-      // starts empty rather than pointing at tracks that are not there.
-      set: { id: "unsaved-set", name: "Untitled set", trackIds: [], targetBpm: 124, targetKey: "8A" },
+      // Inline tracks first: a node or item whose track is absent renders as
+      // nothing, so neither surface may depend on the library page arriving.
+      tracks: mergeTracks(
+        mergeTracks(graph.nodeTracks, liveSet?.itemTracks ?? []),
+        tracks,
+      ),
+      set: liveSet?.set ?? EMPTY_SET,
       selectedTrackId: graph.nodes[0]?.trackId ?? null,
       selectedTransitionId: null,
       multiSelectedTrackIds: [],
@@ -482,17 +522,133 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     scheduleLayoutFlush();
   },
 
-  reorderSet: (from, to) =>
+  reorderSet: (from, to) => {
+    const before = get();
+    const items = before.set.items;
+    if (from < 0 || from >= items.length || to < 0 || to >= items.length) return;
+
+    const moved = items[from];
+    if (moved === undefined) return;
+
+    // Splice-move, not swap: dragging track 1 to position 4 must shift 2–4
+    // left, not trade places with 4.
+    const next = [...items];
+    next.splice(from, 1);
+    next.splice(to, 0, moved);
+
+    set((state) => ({
+      set: { ...state.set, items: next },
+      saveState: state.source === "live" ? "saving" : "unsaved",
+    }));
+
+    const setId = before.setId;
+    if (before.source !== "live" || setId === null) return;
+
+    void (async () => {
+      try {
+        // One row: the server computes a rank between the item's new
+        // neighbours and leaves the rest of the set alone (plan §7.4).
+        await reorderSetItemRequest(setId, moved.id, to);
+        set({ saveState: "saved" });
+      } catch (error) {
+        // Put the order back. A timeline showing an order the database does
+        // not have is worse than a visible failure.
+        set((state) => ({ set: { ...state.set, items }, saveState: "saved" }));
+        get().announce(
+          error instanceof Error ? error.message : "Could not reorder the set.",
+        );
+      }
+    })();
+  },
+
+  addTrackToSet: (trackId, position) => {
+    const before = get();
+    const at = Math.max(0, Math.min(before.set.items.length, position ?? before.set.items.length));
+
+    if (before.source !== "live") {
+      set((state) => {
+        const items = [...state.set.items];
+        items.splice(at, 0, { id: `item-${trackId}-${state.statusId}`, trackId });
+        return { set: { ...state.set, items }, saveState: "unsaved" };
+      });
+      return;
+    }
+
+    const setId = before.setId;
+    if (setId === null) {
+      get().announce("This workspace has no set yet.");
+      return;
+    }
+
+    // Optimistic, under a temporary id — a drop that waits for a round trip
+    // before drawing anything reads as a failed drop.
+    const tempId = `${TEMP_NODE_PREFIX}item-${trackId}-${before.statusId}`;
     set((state) => {
-      const ids = [...state.set.trackIds];
-      if (from < 0 || from >= ids.length || to < 0 || to >= ids.length) return state;
-      // Splice-move, not swap: dragging track 1 to position 4 must shift 2–4
-      // left, not trade places with 4. Every track appears exactly once.
-      const [moved] = ids.splice(from, 1);
-      if (moved === undefined) return state;
-      ids.splice(to, 0, moved);
-      return { set: { ...state.set, trackIds: ids }, saveState: "unsaved" };
-    }),
+      const items = [...state.set.items];
+      items.splice(at, 0, { id: tempId, trackId });
+      return { set: { ...state.set, items }, saveState: "saving" };
+    });
+
+    void (async () => {
+      try {
+        const created = adaptSetItem(await addSetItemRequest(setId, { trackId, position: at }));
+        set((state) => ({
+          set: {
+            ...state.set,
+            items: state.set.items.map((item) => (item.id === tempId ? created : item)),
+          },
+          saveState: "saved",
+        }));
+      } catch (error) {
+        set((state) => ({
+          set: {
+            ...state.set,
+            items: state.set.items.filter((item) => item.id !== tempId),
+          },
+          saveState: "saved",
+        }));
+        get().announce(
+          error instanceof Error ? error.message : "Could not add that track to the set.",
+        );
+      }
+    })();
+  },
+
+  removeSetItem: (itemId) => {
+    const before = get();
+    const index = before.set.items.findIndex((item) => item.id === itemId);
+    if (index === -1) return;
+    const removed = before.set.items[index];
+    if (removed === undefined) return;
+
+    set((state) => ({
+      set: {
+        ...state.set,
+        items: state.set.items.filter((item) => item.id !== itemId),
+      },
+      saveState: state.source === "live" ? "saving" : "unsaved",
+    }));
+
+    const setId = before.setId;
+    if (before.source !== "live" || setId === null) return;
+
+    void (async () => {
+      try {
+        await removeSetItemRequest(setId, itemId);
+        set({ saveState: "saved" });
+      } catch (error) {
+        // Put it back at the index it came from, not on the end.
+        set((state) => {
+          const items = [...state.set.items];
+          items.splice(Math.min(index, items.length), 0, removed);
+          return { set: { ...state.set, items }, saveState: "saved" };
+        });
+        get().announce(
+          error instanceof Error ? error.message : "Could not remove that track.",
+        );
+      }
+    })();
+  },
 
   addTrackToGraph: (trackId, x, y) => {
     const before = get();
@@ -635,8 +791,8 @@ export function useSelectedTransitionId(): string | null {
 
 /** Track ids on the active set path, as a Set for O(1) membership tests. */
 export function useActiveSetTrackIds(): ReadonlySet<string> {
-  const trackIds = useWorkspace((state) => state.set.trackIds);
-  return new Set(trackIds);
+  const items = useWorkspace((state) => state.set.items);
+  return new Set(items.map((item) => item.trackId));
 }
 
 export function useActiveSetTransitionIds(): ReadonlySet<string> {

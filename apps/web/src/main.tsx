@@ -12,7 +12,8 @@ import "./styles/theme.css";
 
 import { listTracks, listAllTracks, isUnauthenticated } from "./lib/api.js";
 import { createGraph, getGraph, listGraphs } from "./lib/graph-api.js";
-import { adaptGraph, adaptTrack } from "./lib/adapt.js";
+import { createSet, getSet, listSets } from "./lib/set-api.js";
+import { adaptGraph, adaptSet, adaptTrack } from "./lib/adapt.js";
 import { SignIn } from "./components/sign-in.js";
 import { WorkspaceLayout } from "./components/workspace-layout.js";
 import { TopNav } from "./components/top-nav.js";
@@ -93,9 +94,22 @@ function Workspace() {
 
   const graphs = useQuery({ queryKey: ["graphs"], queryFn: listGraphs });
 
+  /**
+   * Creating a workspace creates both halves of it.
+   *
+   * A graph with no set leaves the timeline permanently empty with no way to
+   * fill it, which is the dead end this whole screen exists to avoid. The set
+   * is created first so a failure leaves nothing rather than an orphan graph.
+   */
   const create = useMutation({
-    mutationFn: () => createGraph("Untitled graph"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["graphs"] }),
+    mutationFn: async () => {
+      await createSet({ name: "Untitled set" });
+      return createGraph("Untitled graph");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["graphs"] });
+      await queryClient.invalidateQueries({ queryKey: ["set", "active"] });
+    },
   });
 
   if (useDemo) return <WorkspaceShell />;
@@ -173,21 +187,41 @@ function LiveWorkspace({ graphId }: { graphId: string }) {
   const graph = useQuery({ queryKey: ["graph", graphId], queryFn: () => getGraph(graphId) });
   const tracks = useQuery({ queryKey: ["tracks", "all"], queryFn: listAllTracks });
 
+  /**
+   * The set, resolved in one query.
+   *
+   * A workspace may legitimately have no set, and that is a value rather than
+   * an error — `null` flows through to an empty timeline that says so. Only
+   * the first set is opened; a set switcher is a separate piece of work, and
+   * the top bar already has the control for it disabled.
+   */
+  const setQuery = useQuery({
+    queryKey: ["set", "active"],
+    queryFn: async () => {
+      const sets = await listSets();
+      const first = sets[0];
+      return first ? await getSet(first.id) : null;
+    },
+  });
+
   const graphData = graph.data;
   const trackData = tracks.data;
+  const setData = setQuery.data;
+  const setLoaded = setQuery.isSuccess;
 
   useEffect(() => {
-    if (!graphData || !trackData) return;
+    if (!graphData || !trackData || !setLoaded) return;
     hydrateLive({
       graph: adaptGraph(graphData),
       tracks: trackData.items.map(adaptTrack),
+      set: setData ? adaptSet(setData) : null,
     });
     if (trackData.truncated) {
       announce("Showing the first 2000 tracks — the library is longer than this view loads.");
     }
-  }, [graphData, trackData, hydrateLive, announce]);
+  }, [graphData, trackData, setData, setLoaded, hydrateLive, announce]);
 
-  const error = graph.error ?? tracks.error;
+  const error = graph.error ?? tracks.error ?? setQuery.error;
   if (error) {
     return (
       <div className="grid h-screen place-items-center">
@@ -201,6 +235,7 @@ function LiveWorkspace({ graphId }: { graphId: string }) {
               onClick={() => {
                 void graph.refetch();
                 void tracks.refetch();
+                void setQuery.refetch();
               }}
             >
               Try again

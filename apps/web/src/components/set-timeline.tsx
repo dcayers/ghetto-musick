@@ -12,8 +12,10 @@ import {
   ChevronDown,
   ChevronsDownUp,
   Maximize2,
+  ListPlus,
   Minimize2,
   Plus,
+  X,
 } from "lucide-react";
 import {
   Artwork,
@@ -61,6 +63,15 @@ const TRANSITION_WIDTH = 18;
 const LANE_GAP = 2;
 /** Card + its trailing transition block, i.e. the distance between two cards. */
 const SLOT_STEP = CARD_WIDTH + TRANSITION_WIDTH + LANE_GAP * 2;
+
+/** `addAt` sentinel: drop lands past the last card. */
+const APPEND = -1;
+
+/** The drag payload the library writes, and the only one the lane accepts. */
+const TRACK_MIME = "application/flowgraph-track";
+
+const isTrackDrag = (event: DragEvent<HTMLElement>): boolean =>
+  event.dataTransfer.types.includes(TRACK_MIME);
 
 const CHART_HEIGHT = 72;
 /** Keeps the extreme points off the chart edges so their circles aren't clipped. */
@@ -160,6 +171,13 @@ function axisLabels(
 /** A set entry that resolved to a real track, carrying its true set index. */
 interface Slot {
   readonly index: number;
+  /**
+   * The set item, not the track.
+   *
+   * A set may play the same track twice (§10.4 calls these occurrences), so a
+   * track id neither keys the list nor addresses a position for removal.
+   */
+  readonly itemId: string;
   readonly track: WorkspaceTrack;
 }
 
@@ -174,6 +192,8 @@ export function SetTimeline() {
   const selectTrack = useWorkspace((state) => state.selectTrack);
   const selectTransition = useWorkspace((state) => state.selectTransition);
   const reorderSet = useWorkspace((state) => state.reorderSet);
+  const addTrackToSet = useWorkspace((state) => state.addTrackToSet);
+  const removeSetItem = useWorkspace((state) => state.removeSetItem);
   const togglePanel = useWorkspace((state) => state.togglePanel);
   const setPanelSize = useWorkspace((state) => state.setPanelSize);
   const panelHeight = useWorkspace((state) => state.panels.timeline.size);
@@ -181,6 +201,15 @@ export function SetTimeline() {
 
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  /**
+   * Where a track dragged from the library would land.
+   *
+   * Null when no library drag is in flight; `APPEND` when the pointer is in
+   * the lane but not over a card. Kept separate from `dragOver`, which means
+   * a *reorder* target — the two gestures look alike and read differently,
+   * and sharing one variable made a library drag light up as a move.
+   */
+  const [addAt, setAddAt] = useState<number | null>(null);
 
   /**
    * Carrying the original index alongside the track keeps `reorderSet` honest
@@ -189,11 +218,11 @@ export function SetTimeline() {
    */
   const slots = useMemo<Slot[]>(() => {
     const byId = new Map(tracks.map((track) => [track.id, track]));
-    return set.trackIds.flatMap((id, index) => {
-      const track = byId.get(id);
-      return track ? [{ index, track }] : [];
+    return set.items.flatMap((item, index) => {
+      const track = byId.get(item.trackId);
+      return track ? [{ index, itemId: item.id, track }] : [];
     });
-  }, [set.trackIds, tracks]);
+  }, [set.items, tracks]);
 
   const domain = useMemo(
     () =>
@@ -211,15 +240,22 @@ export function SetTimeline() {
   // tracks side by side that were never linked, and a planner needs to see it.
   const gaps = Math.max(
     0,
-    set.trackIds.length - 1 - activeSetTransitionIds(set, transitions).length,
+    set.items.length - 1 - activeSetTransitionIds(set, transitions).length,
   );
+
+  const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
 
   const isMaximized = panelHeight >= PANEL_LIMITS.timeline.max;
 
   function move(from: number, to: number, title: string): void {
-    if (from === to || to < 0 || to >= set.trackIds.length) return;
+    if (from === to || to < 0 || to >= set.items.length) return;
     reorderSet(from, to);
-    announce(`${title} moved to position ${to + 1} of ${set.trackIds.length}.`);
+    announce(`${title} moved to position ${to + 1} of ${set.items.length}.`);
+  }
+
+  function remove(itemId: string, title: string, position: number): void {
+    removeSetItem(itemId);
+    announce(`${title} removed from position ${position + 1} of the set.`);
   }
 
   return (
@@ -271,6 +307,27 @@ export function SetTimeline() {
               </ListBox>
             </Popover>
           </Select>
+
+          {/* The keyboard route into the set.
+              Dragging from the library is the gesture §10.4 describes, but a
+              drag is the one interaction a keyboard cannot perform, and the
+              rest of this workspace is navigable without a pointer. This adds
+              whatever is selected — the same selection the library, canvas,
+              and inspector already share — so no new concept is introduced. */}
+          <IconButton
+            icon={ListPlus}
+            label={
+              selectedTrack === null
+                ? "Add to set — select a track first"
+                : `Add ${selectedTrack.title} to the set`
+            }
+            isDisabled={selectedTrack === null}
+            onPress={() => {
+              if (selectedTrack === null) return;
+              addTrackToSet(selectedTrack.id);
+              announce(`${selectedTrack.title} added to the end of the set.`);
+            }}
+          />
 
           <IconButton
             icon={isMaximized ? Minimize2 : Maximize2}
@@ -330,22 +387,62 @@ export function SetTimeline() {
           {/* Cards and curve share one scroller. Two synchronised scrollers
               would let the curve drift out of alignment with its cards, which
               is the one thing this panel cannot get wrong. */}
-          <div className="h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+          <div
+            className="h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+            onDragOver={(event) => {
+              // Only the library's payload. Without preventDefault the browser
+              // refuses the drop outright, and accepting anything else would
+              // make a text selection look droppable.
+              if (!isTrackDrag(event)) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              // A card sets its own index on the way through; this only fires
+              // for lane space no card claimed.
+              setAddAt((current) => current ?? APPEND);
+            }}
+            onDragLeave={(event) => {
+              // Ignore the crossings between children — only a departure from
+              // the scroller itself ends the drag.
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              setAddAt(null);
+            }}
+            onDrop={(event) => {
+              if (!isTrackDrag(event)) return;
+              event.preventDefault();
+              const trackId = event.dataTransfer.getData(TRACK_MIME);
+              const at = addAt;
+              setAddAt(null);
+              if (!trackId) return;
+
+              const title = tracks.find((track) => track.id === trackId)?.title ?? "Track";
+              const position = at === null || at === APPEND ? slots.length : at;
+              addTrackToSet(trackId, position);
+              announce(`${title} added to the set at position ${position + 1}.`);
+            }}
+          >
             <div className="flex h-full w-max flex-col gap-2 pt-2 pr-1 pl-0.5">
               {/* The lane gets the leftover height and keeps its natural size
                   inside it (`min-h-0` so the cards cannot push the band down).
                   That is what fixes the band to CHART_HEIGHT above the bottom
                   edge at every panel height, which is what the gutter mirrors. */}
               <div className="min-h-0 flex-1">
-                <div className="flex items-start" style={{ gap: LANE_GAP }}>
+                <div
+                  className={cx(
+                    "flex items-start rounded-md",
+                    // Not colour alone: a dashed ring appears, which survives
+                    // greyscale and any colour vision deficiency.
+                    addAt !== null && "outline-accent outline-2 outline-offset-4 outline-dashed",
+                  )}
+                  style={{ gap: LANE_GAP }}
+                >
                   {slots.map((slot, position) => {
                     const next = slots[position + 1];
                     return (
                       <TrackSlotWithLink
-                        key={slot.track.id}
+                        key={slot.itemId}
                         slot={slot}
                         next={next}
-                        total={set.trackIds.length}
+                        total={set.items.length}
                         isSelected={slot.track.id === selectedTrackId}
                         isDropTarget={dragOver === slot.index && dragFrom !== slot.index}
                         isDragging={dragFrom === slot.index}
@@ -357,15 +454,22 @@ export function SetTimeline() {
                         onSelectTransition={selectTransition}
                         onAnnounce={announce}
                         onMove={move}
+                        onRemove={() => remove(slot.itemId, slot.track.title, slot.index)}
                         onDragStart={(event) => {
                           event.dataTransfer.setData("text/plain", String(slot.index));
                           event.dataTransfer.effectAllowed = "move";
                           setDragFrom(slot.index);
                         }}
                         onDragOver={(event) => {
-                          // Only our own cards are droppable; a library row would
-                          // otherwise appear to be accepted and then do nothing.
-                          if (dragFrom === null) return;
+                          // A library track lands *before* this card; one of our
+                          // own cards is a reorder. Two gestures, two effects.
+                          if (dragFrom === null) {
+                            if (!isTrackDrag(event)) return;
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "copy";
+                            setAddAt(slot.index);
+                            return;
+                          }
                           event.preventDefault();
                           event.dataTransfer.dropEffect = "move";
                           setDragOver(slot.index);
@@ -429,6 +533,7 @@ function TrackSlotWithLink({
   onSelectTransition,
   onAnnounce,
   onMove,
+  onRemove,
   onDragStart,
   onDragOver,
   onDrop,
@@ -446,6 +551,7 @@ function TrackSlotWithLink({
   onSelectTransition: (transitionId: string) => void;
   onAnnounce: (message: string) => void;
   onMove: (from: number, to: number, title: string) => void;
+  onRemove: () => void;
   onDragStart: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -465,7 +571,7 @@ function TrackSlotWithLink({
         onDrop={onDrop}
         onDragEnd={onDragEnd}
         className={cx(
-          "h-[88px] shrink-0 rounded-lg",
+          "group/slot relative h-[88px] shrink-0 rounded-lg",
           isDragging && "opacity-40",
           // Not colour alone: the drop target grows a dashed outline offset
           // clear of the card's own border.
@@ -534,6 +640,19 @@ function TrackSlotWithLink({
               {formatDuration(track.durationSeconds)}
             </span>
           </div>
+        </Button>
+
+        {/* A sibling of the card, not a child: a button inside a button is
+            neither valid nor operable. Revealed on hover or keyboard focus so
+            the lane is not a row of permanent delete crosses, but it stays in
+            the tab order either way — a control only pointer users can reach
+            is not a control. */}
+        <Button
+          onPress={onRemove}
+          aria-label={`Remove ${track.title} from the set`}
+          className="border-border bg-surface text-ink-subtle hover:border-danger hover:text-danger absolute -top-1.5 -right-1.5 grid size-[18px] place-items-center rounded-full border opacity-0 transition-opacity group-hover/slot:opacity-100 focus-visible:opacity-100"
+        >
+          <X size={11} aria-hidden="true" />
         </Button>
       </div>
 
@@ -723,6 +842,10 @@ function MetricCurve({
     // hollow with an "unknown" title so it is never read as real data.
     const ratio = value === null ? 0.5 : (value - domain.min) / span;
     return {
+      // Carried so the curve's marks key on the occurrence, not the track. A
+      // set that plays a track twice would otherwise give React two children
+      // with one key, and it drops or duplicates them at will.
+      itemId: slot.itemId,
       track: slot.track,
       value,
       x: cardCenterX(position),
@@ -754,7 +877,7 @@ function MetricCurve({
             belongs to — it is what ties a step in the curve to the mix causing it. */}
         {points.slice(0, -1).map((point, position) => (
           <line
-            key={`guide-${point.track.id}`}
+            key={`guide-${point.itemId}`}
             x1={boundaryX(position)}
             y1={0}
             x2={boundaryX(position)}
@@ -782,7 +905,7 @@ function MetricCurve({
           const isSelected = point.track.id === selectedTrackId;
           return (
             <circle
-              key={point.track.id}
+              key={point.itemId}
               cx={point.x}
               cy={point.y}
               r={isSelected ? 4.5 : 3}
@@ -806,7 +929,7 @@ function MetricCurve({
           not shape-and-colour-only for anyone using a screen reader. */}
       <ol className="sr-only">
         {points.map((point, position) => (
-          <li key={point.track.id}>
+          <li key={point.itemId}>
             {position + 1}. {point.track.title} — {metricText(point.track, metric)}
           </li>
         ))}

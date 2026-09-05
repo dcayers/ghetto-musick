@@ -32,6 +32,7 @@ model Workspace {
   tracks      Track[]
   graphs      Graph[]
   transitions Transition[]
+  sets        Set[]
 
   @@map("workspaces")
 }
@@ -219,6 +220,71 @@ model Transition {
   @@map("transitions")
 }
 
+// --- Sets -------------------------------------------------------------------
+
+// A planned running order over the library — plan §10.4. Sets reference tracks
+// directly rather than graph nodes: the same track can be planned into a set
+// without being placed on any canvas, and moving a node must not move a set.
+//
+// `SetVersion`, `SetBranch`, and `SetItemTransition` from the §7.3 outline are
+// not here. Branches are deferred (decision 11) and publish snapshots follow
+// the validation work; adding empty tables for them now would suggest a
+// capability that does not exist.
+model Set {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  name String
+
+  // Declared, not averaged — plan §10.4. A set is planned *around* a tempo and
+  // key; averaging its members would drift on every swap, and averaging
+  // positions on the Camelot wheel is meaningless.
+  targetBpm Decimal? @db.Decimal(6, 2)
+  targetKey String?
+
+  // Optimistic concurrency, matching Graph. A reorder is a read-modify-write
+  // over neighbouring ranks, so two clients editing one set need the same
+  // stale-token check the canvas has.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     SetItem[]
+
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("sets")
+}
+
+// Ordered by `rank`, a fractional string rather than a renumbered integer —
+// plan §7.4. Moving one item writes one row instead of renumbering the tail,
+// and two clients reordering different regions of a set do not contend.
+//
+// No unique constraint on (setId, trackId): §10.4 calls these track
+// *occurrences*, and a set may legitimately play a track more than once.
+model SetItem {
+  id      String @id @db.Uuid
+  setId   String @db.Uuid
+  trackId String @db.Uuid
+
+  rank  String
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  set   Set   @relation(fields: [setId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Two items sharing a rank would tie, and the order would become whatever
+  // the planner happened to return.
+  @@unique([setId, rank])
+  @@index([setId, rank])
+  @@index([trackId])
+  @@map("set_items")
+}
+
 // --- Track library ----------------------------------------------------------
 
 model Track {
@@ -252,6 +318,7 @@ model Track {
 
   workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   graphNodes      GraphNode[]
+  setItems        SetItem[]
   transitionsFrom Transition[] @relation("TransitionFrom")
   transitionsTo   Transition[] @relation("TransitionTo")
 

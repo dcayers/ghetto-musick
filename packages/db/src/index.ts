@@ -10,6 +10,10 @@ export type {
   Graph,
   GraphNode,
   Transition,
+  // Named `Set` to match the plan's §7.3 outline. Import it aliased —
+  // an unaliased `Set` shadows the global in any file that builds one.
+  Set,
+  SetItem,
 } from "./generated/client.js";
 export { WorkspaceRole } from "./generated/enums.js";
 

@@ -22,7 +22,7 @@ import { TransitionEdge, type TransitionEdgeData } from "./transition-edge.js";
 import { CanvasToolbar, CanvasZoomControls, type CanvasTool } from "../canvas-tools.js";
 import { EmptyState } from "../primitives.js";
 import { IconButton } from "../ui.js";
-import { techniqueSpec } from "../../lib/workspace-data.js";
+import { setTrackIds, techniqueSpec } from "../../lib/workspace-data.js";
 import type {
   WorkspaceGraphNode,
   WorkspaceSet,
@@ -138,11 +138,12 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
 
   const nodeIdByTrack = new Map(placed.map((entry) => [entry.track.id, entry.node.id]));
   const transitionById = new Map(transitions.map((tx) => [tx.id, tx]));
+  const setOrder = setTrackIds(activeSet);
 
   // 1-based, because it is read aloud and printed on the node — a DJ counts
   // from one. `indexOf` over six ids is cheaper than the Map that replaces it.
   const setPositionOf = (trackId: string): number | null => {
-    const index = activeSet.trackIds.indexOf(trackId);
+    const index = setOrder.indexOf(trackId);
     return index === -1 ? null : index + 1;
   };
 
@@ -162,7 +163,7 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
         (tx) =>
           tx.origin === "ai" &&
           !manualTargets.has(tx.targetTrackId) &&
-          !activeSet.trackIds.includes(tx.targetTrackId),
+          !setOrder.includes(tx.targetTrackId),
       )
       .map((tx) => tx.targetTrackId),
   );
@@ -194,7 +195,7 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
     data: {
       trackId: track.id,
       simplified,
-      inActiveSet: activeSet.trackIds.includes(track.id),
+      inActiveSet: setOrder.includes(track.id),
       setPosition: setPositionOf(track.id),
       isAiSuggested: aiTargets.has(track.id),
     },
@@ -564,7 +565,7 @@ function Canvas() {
     () =>
       new Set(
         graphNodes
-          .filter((node) => activeSet.trackIds.includes(node.trackId))
+          .filter((node) => setTrackIds(activeSet).includes(node.trackId))
           .map((node) => node.id),
       ),
     [graphNodes, activeSet],

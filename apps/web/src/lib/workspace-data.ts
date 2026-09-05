@@ -161,21 +161,38 @@ export interface WorkspaceGraphNode {
   readonly y: number;
 }
 
+/**
+ * One occurrence of a track in a set.
+ *
+ * Carries its own id because that is what remove and reorder address. A set
+ * may play the same track twice (§10.4 calls these occurrences), so a track id
+ * alone does not identify a position.
+ */
+export interface WorkspaceSetItem {
+  readonly id: string;
+  readonly trackId: string;
+}
+
 export interface WorkspaceSet {
   readonly id: string;
   readonly name: string;
   /** Ordered. Adjacent pairs are looked up against `transitions`. */
-  readonly trackIds: readonly string[];
+  readonly items: readonly WorkspaceSetItem[];
   /**
    * The set's working tempo and key — what the top navigation reads out.
    *
    * Declared, not averaged. A set is *planned around* a tempo; averaging the
    * members would drift every time one is swapped, and averaging positions on
    * the Camelot wheel is meaningless (12A and 1A average to 6.5A, which is
-   * across the wheel from both).
+   * across the wheel from both). Null when the plan has not stated one.
    */
-  readonly targetBpm: number;
-  readonly targetKey: string;
+  readonly targetBpm: number | null;
+  readonly targetKey: string | null;
+}
+
+/** The set's running order as track ids, for adjacency lookups. */
+export function setTrackIds(set: WorkspaceSet): string[] {
+  return set.items.map((item) => item.trackId);
 }
 
 /* ------------------------------------------------------------- generators -- */
@@ -720,14 +737,14 @@ export const TRANSITIONS: readonly WorkspaceTransition[] = [
 export const ACTIVE_SET: WorkspaceSet = {
   id: "set-sunset-rooftop",
   name: "Sunset Rooftop Set",
-  trackIds: [
+  items: [
     "trk-awake",
     "trk-afterglow",
     "trk-innerbloom",
     "trk-night-drive",
     "trk-glue",
     "trk-losing-it",
-  ],
+  ].map((trackId) => ({ id: `item-${trackId}`, trackId })),
   targetBpm: 124,
   targetKey: "8A",
 };
@@ -740,9 +757,10 @@ export function activeSetTransitionIds(
   transitions: readonly WorkspaceTransition[],
 ): string[] {
   const ids: string[] = [];
-  for (let i = 0; i < set.trackIds.length - 1; i += 1) {
-    const from = set.trackIds[i];
-    const to = set.trackIds[i + 1];
+  const order = setTrackIds(set);
+  for (let i = 0; i < order.length - 1; i += 1) {
+    const from = order[i];
+    const to = order[i + 1];
     const match = transitions.find(
       (tx) => tx.sourceTrackId === from && tx.targetTrackId === to,
     );
@@ -777,7 +795,7 @@ export function setDuration(
 ): number {
   const byId = new Map(tracks.map((track) => [track.id, track]));
   let total = 0;
-  for (const id of set.trackIds) total += byId.get(id)?.durationSeconds ?? 0;
+  for (const item of set.items) total += byId.get(item.trackId)?.durationSeconds ?? 0;
 
   // Each mix overlaps two tracks, so the set is shorter than the sum. At 124
   // BPM a bar is ~1.94s; close enough for a planning estimate.

@@ -202,4 +202,19 @@ describe("mergeTracks", () => {
   it("returns the second list whole when the first is empty", () => {
     expect(mergeTracks([], [libraryTrack, other])).toHaveLength(2);
   });
+
+  it("collapses repeats inside the first list too", () => {
+    // A set's inline tracks repeat whenever it plays a track twice. Screening
+    // only the second list let those through, and the library rendered the
+    // track twice under one React key.
+    const merged = mergeTracks([graphTrack, other, graphTrack], []);
+
+    expect(merged.map((track) => track.id)).toEqual([graphTrack.id, other.id]);
+  });
+
+  it("keeps ids unique however the repeat is split across the two lists", () => {
+    const merged = mergeTracks([graphTrack, graphTrack], [other, other, libraryTrack]);
+
+    expect(new Set(merged.map((track) => track.id)).size).toBe(merged.length);
+  });
 });
