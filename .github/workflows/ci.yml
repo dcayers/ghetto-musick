@@ -52,9 +52,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # No version pin here on purpose: with `version` omitted the action reads
+      # `packageManager` from the root package.json, which is the same field
+      # corepack and every developer's shell already obey. Pinning it here as
+      # well means one bump has to be made in two files, and the failure when
+      # it is not is CI quietly building under a different pnpm than anyone
+      # runs locally.
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10.28.0
 
       - uses: actions/setup-node@v5
         with:
