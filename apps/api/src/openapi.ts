@@ -9,6 +9,7 @@ import { GraphController } from "./graphs/graph.controller.js";
 import { SetController } from "./sets/set.controller.js";
 import { ImportController } from "./imports/import.controller.js";
 import { HealthController } from "./health/health.controller.js";
+import { restoreNullability } from "./openapi-nullability.js";
 
 /**
  * OpenAPI document — plan §5.3, §8.9.
@@ -22,6 +23,12 @@ import { HealthController } from "./health/health.controller.js";
  * plugin. Both are exported because the two paths build the document
  * separately; a test asserts they produce the same bytes, since "we pass the
  * same config to both" is an assumption that silently rots otherwise.
+ *
+ * The document is post-processed by `restoreNullability` before it is
+ * returned. Rikta 0.12.0 drops Zod's `nullable` flag on the way out, which
+ * would otherwise be inherited by `openapi.json`, by the generated client,
+ * and by every consumer that trusts it. See that module for why the repair
+ * lives after generation rather than in the controllers.
  *
  * This file imports `@riktajs/swagger`, which the ADR-0002 boundary rule
  * confines to the HTTP binding layer. That is a deliberate, named exception
@@ -81,5 +88,5 @@ export function generateOpenApiDocument(): OpenApiDocument {
     generator.addSecurityScheme(name, scheme);
   }
 
-  return generator.addControllers([...API_CONTROLLERS]).generate();
+  return restoreNullability(generator.addControllers([...API_CONTROLLERS]).generate());
 }
