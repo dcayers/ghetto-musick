@@ -22,7 +22,8 @@
     "db:status": "pnpm --filter @flowgraph/db exec prisma migrate status",
     "openapi": "pnpm --filter @flowgraph/api run openapi:generate",
     "api-client:generate": "pnpm --filter @flowgraph/api-client run generate",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "perf": "pnpm --filter @flowgraph/web run perf"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -30,6 +31,7 @@
     "@types/node": "^22.19.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
+    "playwright": "^1.63.0",
     "prettier": "^3.9.6",
     "testcontainers": "^12.1.0",
     "tsx": "^4.23.1",

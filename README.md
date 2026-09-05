@@ -131,6 +131,18 @@ pnpm test              # unit — about a second, needs nothing
 pnpm test:integration  # repository and integration — needs Docker
 ```
 
+```bash
+pnpm perf                          # the §9.4 gate: 1000 nodes, 3000 edges
+pnpm perf -- --nodes 2000          # a larger scene
+pnpm perf -- --headed              # watch it
+```
+
+`pnpm perf` measures the graph canvas against the §3.5 budget and exits
+non-zero if it regresses. It starts Vite in-process and drives the real
+canvas in Chromium, so it needs no running dev server. The measured result
+and the decision it produced are in
+[ADR-0011](docs/adr/0011-graph-render-budget.md).
+
 `pnpm test:integration` starts its own PostgreSQL through Testcontainers and
 applies the real migrations to it, so it neither touches nor depends on the
 development database from `pnpm infra:up`. It covers what a mocked Prisma

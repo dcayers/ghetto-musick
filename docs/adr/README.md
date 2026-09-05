@@ -14,6 +14,7 @@ Decisions that shape the FlowGraph codebase. Each ADR is immutable once accepted
 | [0008](0008-prisma-7.md) | Prisma 7 as the ORM, hand-wired into Rikta DI | Accepted |
 | [0009](0009-ai-provider.md) | AI provider behind a port, defaulting to Claude | Accepted |
 | [0010](0010-serato-format-scope.md) | Serato format scope — read everything, write crates only | Accepted |
+| [0011](0011-graph-render-budget.md) | React Flow clears the 1k/3k graph budget; no Sigma fallback | Accepted |
 
 ## Format
 
