@@ -1,0 +1,445 @@
+// FlowGraph schema.
+//
+// Migration sequence follows plan §23.2. This is step 1 (identity, workspace)
+// and step 2 (track), which is what the Phase 0 vertical slice needs. Graph,
+// transition, marker, and set models follow in later migrations.
+//
+// IDs are UUIDv7 generated application-side — ADR-0003. Prisma has no default
+// for that, which is deliberate: `newId()` from @flowgraph/contracts is the
+// only generator, so the bridge and web app can mint IDs offline too.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+// Prisma 7 removed `url` from the datasource block. The connection string for
+// Migrate now lives in ../prisma.config.ts, and the runtime client connects
+// through a driver adapter (@prisma/adapter-pg). See ADR-0008.
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Identity and tenancy ---------------------------------------------------
+
+model Workspace {
+  id        String   @id @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  tracks      Track[]
+  graphs      Graph[]
+  transitions Transition[]
+  sets        Set[]
+  localFiles  LocalFile[]
+  importRuns  ImportRun[]
+
+  @@map("workspaces")
+}
+
+// --- Identity: owned by better-auth (ADR-0004) -------------------------------
+//
+// The four models below (User, Session, Account, Verification) follow
+// better-auth's expected shape. Field names are its convention, not ours —
+// `name` rather than `displayName`, `emailVerified` as a required boolean.
+// Do not rename them to match house style; the adapter maps by name.
+//
+// IDs here are text, not @db.Uuid: better-auth generates its own identifiers
+// and they are not UUIDv7. ADR-0003 governs identifiers *we* mint.
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+
+  // Domain relation — not part of better-auth's schema.
+  memberships WorkspaceMember[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Holds both password credentials and linked OAuth providers. Spotify tokens
+// land here via account linking rather than in a parallel mechanism (§7.1).
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+// Every resource hangs off a Workspace rather than a User, even though MVP
+// creates exactly one personal workspace per user (plan §7.1). Retrofitting
+// tenancy later is brutal; a single OWNER row costs nothing now.
+model WorkspaceMember {
+  id          String        @id @db.Uuid
+  workspaceId String        @db.Uuid
+  // Text, not uuid — this references better-auth's User.id, which it mints
+  // in its own format. Our own ids remain UUIDv7 (ADR-0003).
+  userId      String
+  role        WorkspaceRole @default(OWNER)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+// --- Planning graph ---------------------------------------------------------
+
+model Graph {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  name String
+
+  // Optimistic concurrency for bounded layout batches — plan §6.3, §10.1.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  nodes     GraphNode[]
+
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("graphs")
+}
+
+// Position lives here, not on Track — plan §7.2. The same track can appear in
+// several graphs, each with its own layout.
+model GraphNode {
+  id      String @id @db.Uuid
+  graphId String @db.Uuid
+  trackId String @db.Uuid
+
+  x Float
+  y Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  graph Graph @relation(fields: [graphId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Decision 16: duplicate visual occurrences of a track are not allowed in v1.
+  @@unique([graphId, trackId])
+  @@index([trackId])
+  @@map("graph_nodes")
+}
+
+// Transitions are reusable across graphs and **directed** — plan §7.2. An A→B
+// transition is not automatically valid as B→A: the pitch adjustment and
+// energy delta both invert.
+model Transition {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  fromTrackId String @db.Uuid
+  toTrackId   String @db.Uuid
+
+  technique String  @default("blend")
+  notes     String?
+  tags      String[]
+
+  // Snapshot of the deterministic score at authoring time, with the algorithm
+  // version that produced it — plan §10.2. Without the version a weights
+  // change silently reinterprets every stored score.
+  score            Decimal? @db.Decimal(4, 3)
+  scoreAlgorithm   Int?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromTrack Track     @relation("TransitionFrom", fields: [fromTrackId], references: [id], onDelete: Cascade)
+  toTrack   Track     @relation("TransitionTo", fields: [toTrackId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fromTrackId, toTrackId, technique])
+  @@index([workspaceId, fromTrackId])
+  @@index([workspaceId, toTrackId])
+  @@map("transitions")
+}
+
+// --- Import and local files -------------------------------------------------
+
+// The audio behind a track, when there is any.
+//
+// Separate from Track because most entries in a real library have none: the
+// ADR-0010 S0 run found five of six were streaming, with no `pfil` record at
+// all. A nullable path column on Track would make "streaming" look like
+// missing data; a missing row says it plainly.
+//
+// Fingerprints are absent deliberately. Plan §7.4 keys this on a content
+// fingerprint, which needs the file read that only a bridge or a local
+// analyser can do; until then the canonical path is the identity, and
+// re-import matches on it.
+model LocalFile {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+  trackId     String @db.Uuid
+
+  /// Volume-relative, exactly as Serato stores it.
+  seratoPath String
+  /// Resolved against the importing device's volume root.
+  canonicalPath String
+  /// Indexed identity. Hashed because a path can exceed a btree key.
+  canonicalPathHash String
+
+  /// Container as Serato labels it: "mp3", "aiff".
+  fileType  String?
+  sizeBytes BigInt?
+  fileModifiedAt DateTime?
+
+  /// True when the path was recorded but nothing is there now.
+  missing Boolean @default(false)
+
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  track     Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Plan §7.4 keys this on (deviceId, canonicalPathHash). There is no device
+  // model yet — no bridge — so the workspace is the scope, which is the same
+  // guarantee for a single-machine install.
+  @@unique([workspaceId, canonicalPathHash])
+  @@unique([trackId])
+  @@index([workspaceId, missing])
+  @@map("local_files")
+}
+
+// One import, for audit and for the summary the UI reports.
+//
+// `ImportItem` and `MatchCandidate` from the §7.1 outline are not here: they
+// exist to drive the manual reconciliation UI, and matching is currently path
+// equality with nothing ambiguous to resolve. They arrive with fingerprinting.
+model ImportRun {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  source String @default("serato")
+  /// The `_Serato_` directory this run read.
+  root String
+
+  status ImportRunStatus @default(RUNNING)
+
+  tracksSeen     Int @default(0)
+  tracksCreated  Int @default(0)
+  tracksUpdated  Int @default(0)
+  filesMissing   Int @default(0)
+  streamingSeen  Int @default(0)
+
+  /// Redacted message on failure — never a path or a token (§12.2).
+  error String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startedAt(sort: Desc)])
+  @@map("import_runs")
+}
+
+enum ImportRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@map("import_run_status")
+}
+
+// --- Sets -------------------------------------------------------------------
+
+// A planned running order over the library — plan §10.4. Sets reference tracks
+// directly rather than graph nodes: the same track can be planned into a set
+// without being placed on any canvas, and moving a node must not move a set.
+//
+// `SetVersion`, `SetBranch`, and `SetItemTransition` from the §7.3 outline are
+// not here. Branches are deferred (decision 11) and publish snapshots follow
+// the validation work; adding empty tables for them now would suggest a
+// capability that does not exist.
+model Set {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  name String
+
+  // Declared, not averaged — plan §10.4. A set is planned *around* a tempo and
+  // key; averaging its members would drift on every swap, and averaging
+  // positions on the Camelot wheel is meaningless.
+  targetBpm Decimal? @db.Decimal(6, 2)
+  targetKey String?
+
+  // Optimistic concurrency, matching Graph. A reorder is a read-modify-write
+  // over neighbouring ranks, so two clients editing one set need the same
+  // stale-token check the canvas has.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     SetItem[]
+
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("sets")
+}
+
+// Ordered by `rank`, a fractional string rather than a renumbered integer —
+// plan §7.4. Moving one item writes one row instead of renumbering the tail,
+// and two clients reordering different regions of a set do not contend.
+//
+// No unique constraint on (setId, trackId): §10.4 calls these track
+// *occurrences*, and a set may legitimately play a track more than once.
+model SetItem {
+  id      String @id @db.Uuid
+  setId   String @db.Uuid
+  trackId String @db.Uuid
+
+  rank  String
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  set   Set   @relation(fields: [setId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Two items sharing a rank would tie, and the order would become whatever
+  // the planner happened to return.
+  @@unique([setId, rank])
+  @@index([setId, rank])
+  @@index([trackId])
+  @@map("set_items")
+}
+
+// --- Track library ----------------------------------------------------------
+
+model Track {
+  id String @id @db.Uuid
+
+  workspaceId String @db.Uuid
+
+  title  String
+  artist String
+
+  // Decimal, not Float — plan §7.2. BPM participates in exact comparisons
+  // (transition tempo windows, duplicate detection) where binary float drift
+  // produces wrong answers.
+  bpm Decimal? @db.Decimal(6, 2)
+
+  // Camelot notation, e.g. "8A". Validated at the contract boundary.
+  keySignature  String?
+  timeSignature String?
+
+  // Descriptive metadata the Serato import supplies (ADR-0010). Nullable
+  // because a streaming entry may carry none of it, and because inventing a
+  // genre for an unimported track would render as though it were measured.
+  album           String?
+  genre           String?
+  durationSeconds Int?
+
+  // Provider identity for a track with no local audio — plan §7.1's
+  // `TrackSource`, reduced to the two columns its uniqueness constraint
+  // actually needs. Serato stores it in the `pfil` slot as
+  // `<id>.spotify`, and it is the only exact key a streaming entry has:
+  // matching those on title and artist would merge two different mixes of
+  // one song on re-import.
+  //
+  // A full TrackSource table arrives with Spotify (§13), which needs raw
+  // metadata and sync state these columns cannot hold.
+  sourceProvider   String?
+  sourceExternalId String?
+
+  tags String[]
+
+  // Optimistic concurrency for PATCH via If-Match — plan §6.3.
+  version Int @default(1)
+
+  // Soft delete: tracks are referenced by graph nodes and set items, so a hard
+  // delete would orphan planning data the user still needs.
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  graphNodes      GraphNode[]
+  setItems        SetItem[]
+  localFile       LocalFile?
+  transitionsFrom Transition[] @relation("TransitionFrom")
+  transitionsTo   Transition[] @relation("TransitionTo")
+
+  // Cursor pagination index. UUIDv7 is time-ordered (ADR-0003), so
+  // (createdAt, id) is a stable, total ordering usable as a cursor.
+  @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([workspaceId, bpm])
+  // Plan §7.4: unique per workspace where the external id is non-null.
+  // Postgres treats nulls as distinct, so rows without one do not collide.
+  @@unique([workspaceId, sourceProvider, sourceExternalId])
+  @@map("tracks")
+}

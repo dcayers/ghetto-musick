@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Prisma 7's generated types exhaust the default 4GB V8 heap during tsc.
+  NODE_OPTIONS: --max-old-space-size=8192
+
+jobs:
+  verify:
+    name: lint · typecheck · test · migrate · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: flowgraph
+          POSTGRES_PASSWORD: flowgraph
+          POSTGRES_DB: flowgraph
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U flowgraph -d flowgraph"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      DATABASE_URL: postgresql://flowgraph:flowgraph@localhost:55432/flowgraph?schema=public
+      REDIS_URL: redis://localhost:56379
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile fails if pnpm-lock.yaml is out of date with the
+      # manifests, so a dependency added without committing the lockfile
+      # cannot reach main.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The Prisma client is gitignored, so every downstream step needs it
+      # generated first. Nothing typechecks without this.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # Plan §8.9: "A generated-client diff is required in the same change as
+      # an API contract change." openapi.json is the checked-in contract of
+      # record; regenerating it and failing on a diff means an endpoint cannot
+      # change without the contract change appearing in the same commit.
+      #
+      # Needs no database or server — the generator reads controller metadata.
+      - name: Check OpenAPI document is current
+        run: |
+          pnpm openapi
+          # `git status --porcelain`, not `git diff`: git diff silently ignores
+          # untracked files, so a deleted-and-regenerated openapi.json would
+          # sail through a diff-only check. Verified: a diff-only version of
+          # this step reported success on a genuinely changed contract.
+          if [ -n "$(git status --porcelain openapi.json)" ]; then
+            echo "::error::openapi.json is stale. Run 'pnpm openapi' and commit the result."
+            git --no-pager diff -- openapi.json | head -60
+            exit 1
+          fi
+
+      # The generated client is gitignored (it is derived from openapi.json,
+      # so committing it would add a large mechanical diff with no review
+      # signal). It still has to compile, so generate it before typecheck.
+      - name: Generate API client
+        run: pnpm api-client:generate
+
+      - name: Lint
+        # Includes the ADR-0002 framework containment rule, which is the one
+        # lint failure that must never be waived.
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit and integration tests
+        run: pnpm test
+
+      # Phase 0 exit criterion: CI provisions a real Postgres and validates a
+      # migration. `migrate deploy` is the production command — never db push.
+      - name: Apply migrations
+        run: pnpm --filter @flowgraph/db run migrate:deploy
+
+      - name: Verify migration state
+        run: pnpm db:status
+
+      # Catches a schema.prisma edited without a corresponding migration.
+      # Verified to exit non-zero on drift, not merely to run.
+      - name: Check for schema drift
+        run: |
+          pnpm --filter @flowgraph/db exec prisma migrate diff \
+            --from-config-datasource \
+            --to-schema=prisma/schema.prisma \
+            --exit-code
+
+      - name: Build
+        run: pnpm build

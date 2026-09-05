@@ -1,0 +1,17 @@
+{
+  "name": "@flowgraph/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "graphology": "^0.26.0",
+    "graphology-types": "^0.24.8"
+  }
+}

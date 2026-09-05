@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/**
+ * FlowGraph design tokens.
+ *
+ * One place for colour, radius, and elevation. Tailwind 4 is CSS-first, so
+ * every `@theme` entry becomes a utility automatically — `--color-surface-card`
+ * gives you `bg-surface-card`. Components must not invent hex values.
+ */
+
+@theme {
+  /* Surfaces — near-black, layered by elevation rather than by opacity. */
+  --color-canvas: #08080c;
+  --color-surface: #0e0e14;
+  --color-surface-raised: #14141c;
+  --color-surface-card: #191922;
+  --color-surface-hover: #20202b;
+  --color-surface-overlay: #1c1c27;
+  /* Selection is a violet *tint* on the surface, not a saturated fill: a
+     selected row must still read as a row. */
+  --color-surface-selected: #1e1830;
+
+  --color-border: #21212c;
+  --color-border-strong: #2e2e3c;
+  --color-border-selected: #7c5cff;
+  --color-grid: #17171f;
+
+  /* Text */
+  --color-ink: #f2f2f7;
+  --color-ink-muted: #9d9dae;
+  --color-ink-subtle: #6e6e80;
+
+  /* Brand */
+  --color-accent: #7c5cff;
+  --color-accent-hover: #8f73ff;
+  --color-accent-muted: #2a2145;
+  --color-accent-soft: #16122a;
+
+  /* Musical metadata. BPM and key are read at a glance and constantly, so
+     they get their own hues rather than sharing the body text colour. */
+  --color-bpm: #6ea8fe;
+  --color-key: #f472b6;
+
+  /* Energy as a scale, not a single hue. §15 calls for semantic energy
+     colour — rendering every waveform violet throws away the one signal a DJ
+     scans for. Cool at the bottom, hot at the top. */
+  --color-energy-1: #38bdf8;
+  --color-energy-2: #4ade80;
+  --color-energy-3: #a3e635;
+  --color-energy-4: #fbbf24;
+  --color-energy-5: #fb7185;
+  --color-energy: #a78bfa;
+  --color-waveform: #8b72e8;
+  --color-waveform-active: #b7a7ff;
+  --color-waveform-muted: #57506f;
+
+  /* Transition techniques. §7 forbids colour as the *only* cue, so every edge
+     also carries a technique label and a dash pattern. */
+  --color-tx-blend: #22d3ee;
+  --color-tx-effect: #c084fc;
+  --color-tx-filter: #a3e635;
+  --color-tx-energy: #fbbf24;
+  --color-tx-cut: #fb7185;
+  --color-tx-default: #64748b;
+
+  /* Status */
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #38bdf8;
+
+  /* One coherent radius scale — §15 forbids oversized panel rounding. */
+  --radius-control: 0.375rem;
+  --radius-card: 0.5rem;
+  --radius-panel: 0.625rem;
+}
+
+/* Base ------------------------------------------------------------------- */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Native controls and scrollbars follow the dark scheme — §17. */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  /* §2: the document never scrolls; panels own their overflow. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Scrollbars are chrome, not content: thin and quiet until hovered. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-subtle);
+  background-clip: content-box;
+}
+
+/* §17: reduced motion applies to React Flow's pan/zoom as well as our own. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus — React Aria sets data-focus-visible, which is keyboard-only, so
+   pointer users get no ring but keyboard users always do. The `:focus-visible`
+   selector covers plain DOM nodes React Aria does not own (SVG edges, the
+   graph pane). */
+[data-focus-visible],
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Dragging must not paint a text selection across half the library — §5. */
+body[data-dragging="true"] {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* React Flow ------------------------------------------------------------- */
+
+.react-flow {
+  --xy-background-color: var(--color-canvas);
+  --xy-edge-stroke-default: var(--color-tx-default);
+  --xy-edge-stroke-width-default: 2;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* Handles are quiet until the node is hovered, focused, or selected — §6.
+   Sized generously for pointer targets while staying visually small. */
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--color-surface-overlay);
+  border: 1.5px solid var(--color-border-strong);
+  opacity: 0.35;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node:focus-within .react-flow__handle,
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+  transform: scale(1.25);
+  border-color: var(--color-accent);
+}
+
+.react-flow__handle-connecting {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  opacity: 1;
+}
+
+.react-flow__handle-valid {
+  background: var(--color-ok);
+  border-color: var(--color-ok);
+  opacity: 1;
+}
+
+.react-flow__edge-text {
+  fill: var(--color-ink-muted);
+  font-size: 10px;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--color-surface);
+}
+
+/* React Flow ships component CSS at a specificity utility classes do not
+   beat, so its chrome is themed here rather than with `class!` overrides that
+   silently lose. */
+.react-flow__controls,
+.react-flow__minimap {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.react-flow__minimap {
+  background: var(--color-surface);
+}
+
+.react-flow__minimap-mask {
+  stroke: var(--color-accent);
+  stroke-width: 2px;
+}
