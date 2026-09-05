@@ -56,9 +56,9 @@ import { PANEL_LIMITS, useWorkspace, type OverlayMetric } from "../state/workspa
  * the only way to guarantee that; a `gap-1.5` class would silently drift the
  * moment the root font size changed.
  */
-const CARD_WIDTH = 118;
-const TRANSITION_WIDTH = 50;
-const LANE_GAP = 4;
+const CARD_WIDTH = 150;
+const TRANSITION_WIDTH = 18;
+const LANE_GAP = 2;
 /** Card + its trailing transition block, i.e. the distance between two cards. */
 const SLOT_STEP = CARD_WIDTH + TRANSITION_WIDTH + LANE_GAP * 2;
 
@@ -153,7 +153,7 @@ function axisLabels(
   domain: { min: number; max: number },
 ): { top: string; bottom: string } {
   if (metric === "key") return { top: "12A", bottom: "1A" };
-  if (metric === "energy") return { top: "5", bottom: "1" };
+  if (metric === "energy") return { top: "High", bottom: "Low" };
   return { top: `${Math.round(domain.max)}`, bottom: `${Math.round(domain.min)}` };
 }
 
@@ -315,7 +315,7 @@ export function SetTimeline() {
               `mt-auto` inside a scroller that clips whenever the cards do not
               fit. Sharing the layout removes the second box that could drift. */}
           <div
-            className="text-ink-subtle pointer-events-none flex shrink-0 flex-col justify-end pr-1.5 pb-3 text-right font-mono text-[9px] tabular-nums"
+            className="text-ink-subtle pointer-events-none flex shrink-0 flex-col justify-end pr-1.5 pb-7 text-right font-mono text-[9px] tabular-nums"
             style={{ width: AXIS_WIDTH }}
           >
             <div
@@ -337,7 +337,7 @@ export function SetTimeline() {
                   That is what fixes the band to CHART_HEIGHT above the bottom
                   edge at every panel height, which is what the gutter mirrors. */}
               <div className="min-h-0 flex-1">
-                <div className="flex items-stretch" style={{ gap: LANE_GAP }}>
+                <div className="flex items-start" style={{ gap: LANE_GAP }}>
                   {slots.map((slot, position) => {
                     const next = slots[position + 1];
                     return (
@@ -393,7 +393,7 @@ export function SetTimeline() {
               {/* Opaque: a lane taller than the space left over slides behind
                   the band rather than through the curve. Flex items paint
                   atomically in order, so this later sibling covers it. */}
-              <div className="bg-surface shrink-0 pb-3">
+              <div className="bg-surface shrink-0 pb-7">
                 <MetricCurve
                   slots={slots}
                   metric={overlayMetric}
@@ -465,7 +465,7 @@ function TrackSlotWithLink({
         onDrop={onDrop}
         onDragEnd={onDragEnd}
         className={cx(
-          "shrink-0 rounded-lg",
+          "h-[88px] shrink-0 rounded-lg",
           isDragging && "opacity-40",
           // Not colour alone: the drop target grows a dashed outline offset
           // clear of the card's own border.
@@ -488,7 +488,7 @@ function TrackSlotWithLink({
             onMove(index, index + delta, track.title);
           }}
           className={cx(
-            "bg-surface-raised flex h-full w-full flex-col gap-1.5 rounded-lg border p-1.5 text-left outline-none transition-colors",
+            "bg-surface-raised flex h-full w-full flex-col gap-1 rounded-lg border p-1.5 text-left outline-none transition-colors",
             // Selection is not signalled by hue alone: the ring adds visible
             // weight, which survives any colour vision deficiency.
             isSelected
@@ -518,24 +518,22 @@ function TrackSlotWithLink({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Bpm value={track.bpm} />
-            <CamelotKey value={track.keySignature} />
-            <span className="ml-auto">
-              <EnergyDots value={track.energy} size={5} />
-            </span>
-          </div>
-
           <Waveform
             trackId={track.id}
             bars={24}
             energy={track.energy}
+            className="h-3"
             {...(isSelected ? { color: "var(--color-waveform-active)" } : {})}
           />
 
-          <span className="text-ink-subtle text-right font-mono text-[10px] tabular-nums">
-            {formatDuration(track.durationSeconds)}
-          </span>
+          <div className="mt-auto flex items-center gap-1.5">
+            <Bpm value={track.bpm} />
+            <CamelotKey value={track.keySignature} />
+            <EnergyDots value={track.energy} size={4} />
+            <span className="text-ink-subtle ml-auto font-mono text-[10px] tabular-nums">
+              {formatDuration(track.durationSeconds)}
+            </span>
+          </div>
         </Button>
       </div>
 
@@ -593,49 +591,49 @@ function TransitionBlock({
   const color = TECHNIQUE_COLOR[spec.family];
   const warnings = transition.warnings.length;
 
+  const label =
+    `${spec.label} from ${fromTitle} to ${toTitle}, ${transition.bars} bars` +
+    (warnings > 0 ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : "");
+
   return (
-    <Button
-      onPress={onPress}
-      {...(isSelected ? { "aria-current": "true" as const } : {})}
-      aria-label={
-        `${spec.label} from ${fromTitle} to ${toTitle}, ${transition.bars} bars` +
-        (warnings > 0 ? `, ${warnings} warning${warnings === 1 ? "" : "s"}` : "")
-      }
-      className={cx(
-        "flex shrink-0 flex-col items-center justify-center gap-1 self-center rounded-md border px-1.5 py-2 outline-none transition-colors",
-        isSelected
-          ? "border-accent ring-accent bg-surface-selected ring-1"
-          : "border-border bg-surface-raised hover:border-border-strong hover:bg-surface-overlay",
-      )}
+    <span
+      className="relative inline-flex h-[88px] shrink-0 items-center justify-center"
       style={{ width: TRANSITION_WIDTH }}
+      title={label}
     >
-      <span className="flex w-full items-center justify-center gap-1">
-        <Truncate className="text-center text-[10px] font-medium" title={spec.label}>
-          {spec.label}
-        </Truncate>
-        {warnings > 0 && <AlertTriangle size={11} aria-hidden="true" className="text-warn shrink-0" />}
-      </span>
-
-      {/* Rendered at real pixel width rather than through a stretched viewBox:
-          a `preserveAspectRatio="none"` scale would distort the dash pattern
-          into a different technique's. */}
-      <svg height={6} className="w-full" aria-hidden="true">
-        <line
-          x1={0}
-          y1={3}
-          x2="100%"
-          y2={3}
-          stroke={color}
-          strokeWidth={2}
-          strokeLinecap="round"
-          {...(spec.dash !== null ? { strokeDasharray: spec.dash } : {})}
-        />
-      </svg>
-
-      <span className="text-ink-subtle font-mono text-[10px] tabular-nums">
-        {transition.bars} bars
-      </span>
-    </Button>
+      <Button
+        onPress={onPress}
+        {...(isSelected ? { "aria-current": "true" as const } : {})}
+        aria-label={label}
+        className={cx(
+          "relative grid size-5 place-items-center rounded-full outline-none transition-colors",
+          isSelected
+            ? "bg-surface-selected ring-accent ring-2"
+            : "hover:bg-surface-overlay",
+        )}
+      >
+        <svg width={20} height={20} aria-hidden="true">
+          <line
+            x1={0}
+            y1={10}
+            x2={20}
+            y2={10}
+            stroke={color}
+            strokeWidth={2}
+            strokeLinecap="round"
+            {...(spec.dash !== null ? { strokeDasharray: spec.dash } : {})}
+          />
+          <circle cx={10} cy={10} r={3} fill="var(--color-surface)" stroke={color} strokeWidth={2} />
+        </svg>
+        {warnings > 0 && (
+          <AlertTriangle
+            size={10}
+            aria-hidden="true"
+            className="text-warn absolute -top-1.5 -right-1.5"
+          />
+        )}
+      </Button>
+    </span>
   );
 }
 
@@ -648,26 +646,59 @@ function AddTransitionBlock({
   toTitle: string;
   onPress: () => void;
 }) {
+  const label = `Add a transition from ${fromTitle} to ${toTitle}`;
   return (
-    <Button
-      onPress={onPress}
-      aria-label={`Add a transition from ${fromTitle} to ${toTitle}`}
-      className="border-border-strong text-ink-subtle hover:border-accent hover:text-accent flex shrink-0 flex-col items-center justify-center gap-1 self-center rounded-md border border-dashed px-1.5 py-2 outline-none transition-colors"
+    <span
+      className="inline-flex h-[88px] shrink-0 items-center justify-center"
       style={{ width: TRANSITION_WIDTH }}
+      title={label}
     >
-      <Plus size={13} aria-hidden="true" />
-      <span className="text-[10px]">Add</span>
-    </Button>
+      <Button
+        onPress={onPress}
+        aria-label={label}
+        className="border-border-strong text-ink-subtle hover:border-accent hover:text-accent grid size-5 place-items-center rounded-full border border-dashed outline-none transition-colors"
+      >
+        <Plus size={11} aria-hidden="true" />
+      </Button>
+    </span>
   );
 }
 
 /**
  * The set's shape over time.
  *
- * Hand-rolled SVG rather than a chart library: this is one polyline over at
+ * Hand-rolled SVG rather than a chart library: this is one smooth path over at
  * most a few dozen points whose x positions are dictated by the lane above, and
  * no charting library gives that alignment for less code than this.
  */
+function smoothPath(points: ReadonlyArray<{ x: number; y: number }>): string {
+  const first = points[0];
+  if (!first) return "";
+  if (points.length === 1) return `M ${first.x} ${first.y}`;
+
+  const segments = [`M ${first.x} ${first.y}`];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[index - 1] ?? points[index];
+    const current = points[index];
+    const next = points[index + 1];
+    const after = points[index + 2] ?? next;
+    if (!previous || !current || !next || !after) continue;
+
+    const control1 = {
+      x: current.x + (next.x - previous.x) / 6,
+      y: current.y + (next.y - previous.y) / 6,
+    };
+    const control2 = {
+      x: next.x - (after.x - current.x) / 6,
+      y: next.y - (after.y - current.y) / 6,
+    };
+    segments.push(
+      `C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${next.x} ${next.y}`,
+    );
+  }
+  return segments.join(" ");
+}
+
 function MetricCurve({
   slots,
   metric,
@@ -699,14 +730,15 @@ function MetricCurve({
     };
   });
 
-  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
   const first = points[0];
   const last = points[points.length - 1];
-  // A single point has no line and no area — a one-coordinate `polyline` draws
-  // nothing and the polygon collapses to zero width. The dot alone is the
-  // honest rendering of a one-track set.
+  // A single point has no line and no area. The dot alone is the honest
+  // rendering of a one-track set.
   const hasCurve = points.length >= 2 && first !== undefined && last !== undefined;
-  const area = hasCurve ? `${first.x},${CHART_HEIGHT} ${line} ${last.x},${CHART_HEIGHT}` : "";
+  const curve = hasCurve ? smoothPath(points) : "";
+  const area = hasCurve
+    ? `${curve} L ${last.x} ${CHART_HEIGHT} L ${first.x} ${CHART_HEIGHT} Z`
+    : "";
 
   return (
     <div>
@@ -734,9 +766,9 @@ function MetricCurve({
 
         {hasCurve && (
           <>
-            <polygon points={area} fill={color} opacity={0.2} />
-            <polyline
-              points={line}
+            <path d={area} fill={color} opacity={0.2} />
+            <path
+              d={curve}
               fill="none"
               stroke={color}
               strokeWidth={2.25}

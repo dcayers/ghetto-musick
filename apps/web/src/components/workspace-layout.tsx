@@ -135,7 +135,7 @@ function WideLayout({ library, graph, timeline, inspector }: Surfaces) {
 
   return (
     <div
-      className="grid min-h-0 flex-1 gap-2 p-2"
+      className="grid min-h-0 flex-1 gap-px"
       style={{
         gridTemplateColumns: `${track(panels.library)} minmax(0, 1fr) ${track(panels.inspector)}`,
         gridTemplateRows: `minmax(0, 1fr) ${track(panels.timeline)}`,

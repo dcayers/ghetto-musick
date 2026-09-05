@@ -181,18 +181,12 @@ export const TransitionEdge = memo(function TransitionEdge({
             }}
             aria-label={ariaLabel}
             className={cx(
-              "bg-surface-overlay flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] font-medium whitespace-nowrap",
-              isAiSuggested ? "border-dashed" : "border-solid",
+              "bg-canvas/75 flex items-center gap-1 rounded px-1 py-px text-[11px] font-medium whitespace-nowrap",
               selected && "ring-accent ring-1",
             )}
             style={{
               // Dynamic per technique, so it cannot come from a utility class.
               color,
-              borderColor: isAiSuggested
-                ? "var(--color-accent)"
-                : selected || inActiveSet
-                  ? color
-                  : "var(--color-border-strong)",
               opacity: weight === "alt" ? 0.72 : 1,
             }}
           >

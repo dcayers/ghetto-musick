@@ -74,13 +74,13 @@ export function TopNav() {
   const save = SAVE_STATE[saveState];
 
   return (
-    <header className="border-border bg-surface flex h-12 shrink-0 items-center gap-3 border-b px-3">
+    <header className="border-border bg-surface flex h-14 shrink-0 items-center gap-3 border-b px-3">
       {/* Left and right both take `flex-1 basis-0` so the view switcher lands
           on the true centre of the bar rather than the centre of whatever is
           left over — otherwise it drifts as the set name grows. */}
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2">
-        <span className="text-ink flex shrink-0 items-center gap-1.5 text-sm font-semibold">
-          <Waypoints size={17} className="text-accent" aria-hidden="true" />
+        <span className="border-border text-ink mr-1 flex shrink-0 items-center gap-3 border-r pr-8 text-xl font-semibold">
+          <Waypoints size={20} className="text-accent" aria-hidden="true" />
           FlowGraph
         </span>
 

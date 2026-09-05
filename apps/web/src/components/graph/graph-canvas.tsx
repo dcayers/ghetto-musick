@@ -619,16 +619,17 @@ function Canvas() {
         nodesDraggable={tool !== "pan"}
       >
         <Background
-          variant={BackgroundVariant.Dots}
+          variant={BackgroundVariant.Lines}
           gap={22}
-          size={1.2}
-          color="var(--color-border-strong)"
+          size={0.7}
+          color="var(--color-grid)"
         />
 
         {showMiniMap && (
           <MiniMap<CanvasNode>
             pannable
             zoomable
+            position="bottom-left"
             ariaLabel="Graph overview"
             // React Flow's 200×150 default eats a quarter of a short canvas and
             // hides the nodes it exists to summarise.

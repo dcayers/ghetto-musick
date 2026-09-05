@@ -146,7 +146,7 @@ function matches(
 
 /* ------------------------------------------------------------ windowing -- */
 
-const ROW_HEIGHT = 56;
+const ROW_HEIGHT = 64;
 /** Rows rendered beyond each edge, so a fast flick never shows a blank band. */
 const OVERSCAN = 5;
 
@@ -276,7 +276,7 @@ export function LibraryPanel() {
   const placed = usePlacedTrackIds();
   const inSet = useActiveSetTrackIds();
 
-  const [searchOpen, setSearchOpen] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -619,7 +619,7 @@ export function LibraryPanel() {
                     // Positioned so the add control can sit over the row's own
                     // background — a sibling in normal flow would cut the
                     // selected tint short of the right edge.
-                    className="border-border/60 relative border-b last:border-b-0"
+                    className="relative px-2 py-1"
                     // The window renders a slice, so position has to be stated
                     // rather than counted from the DOM.
                     aria-posinset={index + 1}
@@ -648,18 +648,18 @@ export function LibraryPanel() {
                       className={cx(
                         // `pr-9` reserves the lane the add control occupies, so
                         // it never lands on top of the tempo/key readout.
-                        "flex h-full w-full cursor-grab items-center gap-2 border-l-2 pr-9 pl-2 text-left transition-colors",
+                        "flex h-full w-full cursor-grab items-center gap-2 rounded-md border pr-9 pl-2 text-left transition-colors",
                         // The left bar is the non-colour half of the selected
                         // state (§17): a stripe that is present or absent
                         // survives greyscale where the violet tint does not.
                         isSelected
                           ? "border-accent bg-surface-selected"
-                          : "hover:bg-surface-hover border-transparent",
+                          : "border-border bg-surface-raised/45 hover:border-border-strong hover:bg-surface-hover",
                         isMissing && "opacity-60",
                         draggingId === track.id && "opacity-40",
                       )}
                     >
-                      <Artwork seed={track.id} size={40} />
+                      <Artwork seed={track.id} size={44} />
 
                       <span className="flex min-w-0 flex-1 flex-col gap-px">
                         <Truncate className="text-ink text-xs leading-4 font-medium">
@@ -701,7 +701,7 @@ export function LibraryPanel() {
                       excludeFromTabOrder={index !== tabbable}
                       aria-label={`Add ${track.title} to canvas`}
                       onPress={() => addToCanvas(track)}
-                      className="text-ink-subtle hover:bg-surface-hover hover:text-ink rounded-control absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center transition-colors"
+                      className="text-ink-subtle hover:bg-surface-hover hover:text-ink rounded-control absolute top-1/2 right-3.5 grid size-6 -translate-y-1/2 place-items-center transition-colors"
                     >
                       <Plus size={14} aria-hidden="true" />
                     </Button>

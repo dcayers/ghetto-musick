@@ -36,8 +36,8 @@ export interface PanelState {
 /** §2 — sensible minimums and maximums for the resizable boundaries. */
 export const PANEL_LIMITS: Readonly<Record<PanelKey, { min: number; max: number; initial: number }>> =
   {
-    library: { min: 240, max: 360, initial: 260 },
-    inspector: { min: 320, max: 460, initial: 320 },
+    library: { min: 240, max: 360, initial: 264 },
+    inspector: { min: 320, max: 460, initial: 354 },
     timeline: { min: 180, max: 380, initial: 250 },
   };
 
@@ -121,7 +121,7 @@ interface WorkspaceState {
 
 /* ------------------------------------------------------------ persistence -- */
 
-const STORAGE_KEY = "flowgraph.workspace.v2";
+const STORAGE_KEY = "flowgraph.workspace.v4";
 
 interface Persisted {
   panels?: Record<string, PanelState>;
