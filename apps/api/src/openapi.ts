@@ -7,6 +7,7 @@ import {
 import { TrackController } from "./tracks/track.controller.js";
 import { GraphController } from "./graphs/graph.controller.js";
 import { SetController } from "./sets/set.controller.js";
+import { ImportController } from "./imports/import.controller.js";
 import { HealthController } from "./health/health.controller.js";
 
 /**
@@ -33,6 +34,7 @@ export const API_CONTROLLERS = [
   TrackController,
   GraphController,
   SetController,
+  ImportController,
   HealthController,
 ] as const;
 
@@ -63,6 +65,7 @@ export const OPENAPI_CONFIG: SwaggerConfig = {
     { name: "Tracks", description: "The track library" },
     { name: "Graphs", description: "Planning canvas: nodes and transitions" },
     { name: "Sets", description: "Running orders over the library" },
+    { name: "Imports", description: "Read-only Serato library import" },
     { name: "Health", description: "Liveness and readiness probes" },
   ],
   securitySchemes: SECURITY_SCHEMES,

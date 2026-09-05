@@ -66,6 +66,8 @@ export interface WorkspaceTrack extends ScorableTrack {
    * drops that component from the weighted mean.
    */
   readonly energy: number | null;
+  /** Serato stores one; the inspector has no row for it yet. */
+  readonly album: string | null;
   readonly genre: string | null;
   readonly year: number | null;
   readonly durationSeconds: number | null;
@@ -486,6 +488,7 @@ function buildTrack(seed: Seed): WorkspaceTrack {
     artist: seed.artist,
     bpm: seed.bpm,
     keySignature: seed.keySignature,
+    album: null,
     energy: seed.energy,
     genre: seed.genre,
     year: seed.year,
@@ -525,6 +528,7 @@ function buildFiller(index: number): WorkspaceTrack {
     artist: FILLER_ARTISTS[(index * 7) % FILLER_ARTISTS.length]!,
     bpm,
     keySignature: `${keyNumber}${mode}`,
+    album: null,
     energy,
     genre: GENRES[index % GENRES.length]!,
     year: 2014 + Math.floor(random() * 12),

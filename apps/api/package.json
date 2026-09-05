@@ -14,12 +14,13 @@
     "@better-auth/prisma-adapter": "1.6.25",
     "@flowgraph/contracts": "workspace:*",
     "@flowgraph/db": "workspace:*",
+    "@flowgraph/domain": "workspace:*",
+    "@flowgraph/serato": "workspace:*",
     "@riktajs/core": "0.12.0",
     "@riktajs/swagger": "0.12.0",
     "better-auth": "1.6.25",
     "dotenv": "^17.4.2",
     "reflect-metadata": "0.2.2",
-    "zod": "4.4.3",
-    "@flowgraph/domain": "workspace:*"
+    "zod": "4.4.3"
   }
 }

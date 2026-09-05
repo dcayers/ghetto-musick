@@ -1,6 +1,6 @@
-import type { Track } from "@flowgraph/db";
 import type { CreateTrackInput, ListTracksQuery, TrackDto } from "@flowgraph/contracts";
 import type { TrackRepository } from "./track.repository.js";
+import { toTrackDto } from "./track-dto.js";
 
 /**
  * Track domain service.
@@ -27,7 +27,7 @@ export class TrackService {
 
   async create(workspaceId: string, input: CreateTrackInput): Promise<TrackDto> {
     const track = await this.repository.create(workspaceId, input);
-    return toDto(track);
+    return toTrackDto(track);
   }
 
   async getById(workspaceId: string, trackId: string): Promise<TrackDto> {
@@ -35,12 +35,12 @@ export class TrackService {
     if (!track) {
       throw new TrackNotFoundError(trackId);
     }
-    return toDto(track);
+    return toTrackDto(track);
   }
 
   async list(workspaceId: string, query: ListTracksQuery): Promise<TrackPage> {
     const { items, nextCursor } = await this.repository.list(workspaceId, query);
-    return { items: items.map(toDto), nextCursor };
+    return { items: items.map(toTrackDto), nextCursor };
   }
 }
 
@@ -49,18 +49,3 @@ export class TrackService {
  * `Date` serializes inconsistently across boundaries. Normalize once here so
  * the wire format always matches `trackSchema`.
  */
-function toDto(track: Track): TrackDto {
-  return {
-    id: track.id,
-    workspaceId: track.workspaceId,
-    title: track.title,
-    artist: track.artist,
-    bpm: track.bpm === null ? null : Number(track.bpm),
-    keySignature: track.keySignature,
-    timeSignature: track.timeSignature,
-    tags: track.tags,
-    version: track.version,
-    createdAt: track.createdAt.toISOString(),
-    updatedAt: track.updatedAt.toISOString(),
-  };
-}

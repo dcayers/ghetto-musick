@@ -39,6 +39,10 @@ const trackDto = {
   keySignature: "6A",
   timeSignature: null,
   tags: ["opener"],
+  album: null,
+  genre: null,
+  durationSeconds: null,
+  source: null,
   version: 1,
   createdAt: "2026-09-05T00:00:00.000Z",
   updatedAt: "2026-09-05T00:00:00.000Z",
@@ -78,15 +82,31 @@ describe("adaptTrack", () => {
     const track = adaptTrack(trackFixture);
 
     // Not a style preference: a genre or energy derived from the id would sit
-    // beside the user's real titles looking like their own metadata.
+    // beside the user's real titles looking like their own metadata. This list
+    // shrinks as the schema grows — `genre`, `durationSeconds`, and `source`
+    // left it when the Serato import landed.
     expect(track.energy).toBeNull();
-    expect(track.genre).toBeNull();
     expect(track.year).toBeNull();
-    expect(track.durationSeconds).toBeNull();
     expect(track.rating).toBeNull();
-    expect(track.source).toBeNull();
     expect(track.hasStems).toBe(false);
     expect(track.provenance).toEqual({});
+  });
+
+  it("carries the metadata the Serato import supplies", () => {
+    const track = adaptTrack(
+      asWire({ ...trackDto, album: "Nobody Is Not Loved", genre: "Melodic House", durationSeconds: 508, source: "local" }),
+    );
+
+    expect(track.album).toBe("Nobody Is Not Loved");
+    expect(track.genre).toBe("Melodic House");
+    expect(track.durationSeconds).toBe(508);
+    expect(track.source).toBe("local");
+  });
+
+  it("passes a streaming track's state through as streaming, not missing", () => {
+    // Most of a real Serato library is streaming (ADR-0010). Rendering those
+    // as missing files would put a warning on five tracks in six.
+    expect(adaptTrack(asWire({ ...trackDto, source: "streaming" })).source).toBe("streaming");
   });
 
   it("gives two adapted tracks the same absences, not id-derived variety", () => {

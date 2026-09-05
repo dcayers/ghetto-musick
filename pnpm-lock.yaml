@@ -53,6 +53,9 @@ importers:
       '@flowgraph/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@flowgraph/serato':
+        specifier: workspace:*
+        version: link:../../packages/serato
       '@riktajs/core':
         specifier: 0.12.0
         version: 0.12.0

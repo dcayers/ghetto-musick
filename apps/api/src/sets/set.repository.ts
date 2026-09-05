@@ -63,7 +63,7 @@ export class SetRepository {
       // Scoped through the set's workspace, not just by setId — otherwise a
       // known set id from another workspace would read its items.
       where: { setId, set: { workspaceId } },
-      include: { track: true },
+      include: { track: { include: { localFile: { select: { missing: true } } } } },
       orderBy: { rank: "asc" },
     });
   }
@@ -136,7 +136,7 @@ export class SetRepository {
           rank: rankFor(existing.map((item) => item.rank)),
           notes: input.notes ?? null,
         },
-        include: { track: true },
+        include: { track: { include: { localFile: { select: { missing: true } } } } },
       });
 
       await tx.set.update({ where: { id: setId }, data: { version: { increment: 1 } } });
@@ -190,7 +190,7 @@ export class SetRepository {
       const moved = await tx.setItem.update({
         where: { id: itemId },
         data: { rank },
-        include: { track: true },
+        include: { track: { include: { localFile: { select: { missing: true } } } } },
       });
 
       await tx.set.update({ where: { id: setId }, data: { version: { increment: 1 } } });

@@ -1,4 +1,5 @@
-import type { PrismaClient, Track } from "@flowgraph/db";
+import type { PrismaClient } from "@flowgraph/db";
+import type { TrackWithFile } from "./track-dto.js";
 import type { CreateTrackInput, ListTracksQuery } from "@flowgraph/contracts";
 import { newId } from "@flowgraph/contracts";
 
@@ -16,7 +17,7 @@ import { newId } from "@flowgraph/contracts";
 export class TrackRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async create(workspaceId: string, input: CreateTrackInput): Promise<Track> {
+  async create(workspaceId: string, input: CreateTrackInput): Promise<TrackWithFile> {
     return this.prisma.track.create({
       data: {
         id: newId(),
@@ -31,9 +32,10 @@ export class TrackRepository {
     });
   }
 
-  async findById(workspaceId: string, trackId: string): Promise<Track | null> {
+  async findById(workspaceId: string, trackId: string): Promise<TrackWithFile | null> {
     return this.prisma.track.findFirst({
       where: { id: trackId, workspaceId, deletedAt: null },
+      include: { localFile: { select: { missing: true } } },
     });
   }
 
@@ -47,7 +49,7 @@ export class TrackRepository {
   async list(
     workspaceId: string,
     query: ListTracksQuery,
-  ): Promise<{ items: Track[]; nextCursor: string | null }> {
+  ): Promise<{ items: TrackWithFile[]; nextCursor: string | null }> {
     const items = await this.prisma.track.findMany({
       where: {
         workspaceId,
@@ -69,6 +71,7 @@ export class TrackRepository {
             }
           : {}),
       },
+      include: { localFile: { select: { missing: true } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),

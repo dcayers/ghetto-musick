@@ -103,6 +103,25 @@ The scan checksums every file before and after parsing and reports byte-for-byte
 verification. Findings from the first real run are in
 [ADR-0010](docs/adr/0010-serato-format-scope.md).
 
+## Importing a Serato library
+
+Press **Import from Serato** in the library panel, or:
+
+```bash
+curl -s -b cookies.txt -X POST http://127.0.0.1:4000/v1/imports/serato \
+  -H "content-type: application/json" -H "Origin: http://localhost:3000" -d '{}'
+```
+
+Read-only and idempotent: a local entry matches on its canonical path and a
+streaming entry on the provider id Serato stores, so re-running updates rather
+than duplicates. Tags, graph placement, and set membership are never touched.
+
+**There is no desktop bridge yet.** Plan §12.1 requires one because a *hosted*
+service cannot reach a DJ's local files — but deployment is local-only for now
+(decision 18), so the API reads the library directly as the user who started
+it. `SeratoSource` in `apps/api/src/imports/` is the seam: a bridge implements
+that interface and posts the same manifests, and nothing downstream changes.
+
 ## Checks
 
 ```bash

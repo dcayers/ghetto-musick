@@ -33,6 +33,7 @@ import {
   useActiveSetTransitionIds,
   useWorkspace,
 } from "../../state/workspace.js";
+import { useSeratoImport } from "../../state/use-serato-import.js";
 
 /**
  * The graph canvas.
@@ -351,6 +352,7 @@ function Canvas() {
   const [tool, setTool] = useState<CanvasTool>("select");
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const seratoImport = useSeratoImport();
 
   const simplified = zoom < SIMPLIFY_BELOW_ZOOM;
 
@@ -723,8 +725,14 @@ function Canvas() {
               hint="Drag a track from the library onto the canvas to place it, then connect it to build a route. Existing sets open here already laid out."
               actions={
                 <>
-                  <PendingAction label="Add Tracks" />
-                  <PendingAction label="Import from Serato" />
+                  <Button
+                    isDisabled={!seratoImport.isAvailable || seratoImport.isImporting}
+                    aria-label={seratoImport.label}
+                    onPress={seratoImport.run}
+                    className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control border px-2.5 py-1 text-xs transition-colors disabled:opacity-50"
+                  >
+                    {seratoImport.isImporting ? "Reading library…" : "Import from Serato"}
+                  </Button>
                   <PendingAction label="Generate with AI" />
                 </>
               }

@@ -138,7 +138,7 @@ Run against a real Serato DJ Pro library (`~/Music/_Serato_`), not synthetic fix
 
 **Five of six entries had `ttyp: "streaming"`, not a local file type.** Only one was an `mp3`.
 
-A streaming entry has **no `pfil` record at all** — there is no local file. That has consequences well beyond parsing:
+A streaming entry has **no local file**. That has consequences well beyond parsing:
 
 - **No audio to analyse.** The Rust DSP path (ADR-0006) has nothing to run against for those tracks.
 - **No GEOB tags to read.** Cue points and beatgrids live *inside* audio files; a streaming track has none.
@@ -147,6 +147,45 @@ A streaming entry has **no `pfil` record at all** — there is no local file. Th
 Serato does still store `tbpm` and `tkey` for streaming entries, so the database remains a useful metadata source either way. But plan §4.3's precedence rule — "Serato/local files win for DJ metadata" — quietly assumes local files exist. On a streaming-heavy library there is nothing beneath the top of that hierarchy.
 
 This is one library and should not be over-generalised. It does mean the import path must treat `filePath` as genuinely optional rather than incidentally nullable, and that a "streaming track" is a first-class state, not a degenerate one.
+
+### Correction (2026-09-05): a streaming entry *does* have a `pfil`
+
+The S0 write-up above originally stated that a streaming entry has no `pfil`
+record at all. Re-reading the same library while building the S1 import showed
+that is wrong. Every entry had one; for a streaming entry it holds a **provider
+identity rather than a path**:
+
+```
+ttyp: "streaming"   pfil: "56GaYWGPrKJt6e6SGKKiUD.spotify"
+```
+
+The consequence is not academic. The first import treated the path as the
+evidence of a local file — reasonable given the original finding — resolved
+`56GaYWGPrKJt6e6SGKKiUD.spotify` against the filesystem, found nothing, and
+reported **five of six tracks as missing files**. A red warning on most of a
+library, from one wrong sentence in an ADR.
+
+**`ttyp` is the signal**, with the `pfil` extension as corroboration. The rule
+now: an entry has no local audio if Serato typed it `streaming`, *or* its path
+slot holds a `<id>.<provider>` reference, *or* there is no path slot at all —
+the last being what this ADR originally described, which remains possible and
+is still handled.
+
+The identity is worth keeping rather than discarding. A Spotify id is exact,
+so re-importing a streaming library matches on it instead of on title and
+artist — which would merge a radio edit and an extended mix of one song. It is
+stored on `Track` as `sourceProvider` / `sourceExternalId`, the two columns
+plan §7.4's `TrackSource` uniqueness constraint actually needs; the full
+`TrackSource` model arrives with Spotify (§13), which needs raw metadata and
+sync state these columns cannot hold.
+
+`tlen` also moved from the unmapped list into a field. It is the running time,
+which the set timeline sums and the inspector shows.
+
+**Method note.** This was found by running the import against a real library
+and disbelieving the resulting numbers, not by reading the parser. Synthetic
+fixtures agreed with the wrong model perfectly, because they had been written
+from it.
 
 ### Coverage gaps, stated plainly
 

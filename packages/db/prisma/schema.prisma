@@ -33,6 +33,8 @@ model Workspace {
   graphs      Graph[]
   transitions Transition[]
   sets        Set[]
+  localFiles  LocalFile[]
+  importRuns  ImportRun[]
 
   @@map("workspaces")
 }
@@ -220,6 +222,96 @@ model Transition {
   @@map("transitions")
 }
 
+// --- Import and local files -------------------------------------------------
+
+// The audio behind a track, when there is any.
+//
+// Separate from Track because most entries in a real library have none: the
+// ADR-0010 S0 run found five of six were streaming, with no `pfil` record at
+// all. A nullable path column on Track would make "streaming" look like
+// missing data; a missing row says it plainly.
+//
+// Fingerprints are absent deliberately. Plan §7.4 keys this on a content
+// fingerprint, which needs the file read that only a bridge or a local
+// analyser can do; until then the canonical path is the identity, and
+// re-import matches on it.
+model LocalFile {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+  trackId     String @db.Uuid
+
+  /// Volume-relative, exactly as Serato stores it.
+  seratoPath String
+  /// Resolved against the importing device's volume root.
+  canonicalPath String
+  /// Indexed identity. Hashed because a path can exceed a btree key.
+  canonicalPathHash String
+
+  /// Container as Serato labels it: "mp3", "aiff".
+  fileType  String?
+  sizeBytes BigInt?
+  fileModifiedAt DateTime?
+
+  /// True when the path was recorded but nothing is there now.
+  missing Boolean @default(false)
+
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  track     Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  // Plan §7.4 keys this on (deviceId, canonicalPathHash). There is no device
+  // model yet — no bridge — so the workspace is the scope, which is the same
+  // guarantee for a single-machine install.
+  @@unique([workspaceId, canonicalPathHash])
+  @@unique([trackId])
+  @@index([workspaceId, missing])
+  @@map("local_files")
+}
+
+// One import, for audit and for the summary the UI reports.
+//
+// `ImportItem` and `MatchCandidate` from the §7.1 outline are not here: they
+// exist to drive the manual reconciliation UI, and matching is currently path
+// equality with nothing ambiguous to resolve. They arrive with fingerprinting.
+model ImportRun {
+  id          String @id @db.Uuid
+  workspaceId String @db.Uuid
+
+  source String @default("serato")
+  /// The `_Serato_` directory this run read.
+  root String
+
+  status ImportRunStatus @default(RUNNING)
+
+  tracksSeen     Int @default(0)
+  tracksCreated  Int @default(0)
+  tracksUpdated  Int @default(0)
+  filesMissing   Int @default(0)
+  streamingSeen  Int @default(0)
+
+  /// Redacted message on failure — never a path or a token (§12.2).
+  error String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startedAt(sort: Desc)])
+  @@map("import_runs")
+}
+
+enum ImportRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@map("import_run_status")
+}
+
 // --- Sets -------------------------------------------------------------------
 
 // A planned running order over the library — plan §10.4. Sets reference tracks
@@ -304,6 +396,25 @@ model Track {
   keySignature  String?
   timeSignature String?
 
+  // Descriptive metadata the Serato import supplies (ADR-0010). Nullable
+  // because a streaming entry may carry none of it, and because inventing a
+  // genre for an unimported track would render as though it were measured.
+  album           String?
+  genre           String?
+  durationSeconds Int?
+
+  // Provider identity for a track with no local audio — plan §7.1's
+  // `TrackSource`, reduced to the two columns its uniqueness constraint
+  // actually needs. Serato stores it in the `pfil` slot as
+  // `<id>.spotify`, and it is the only exact key a streaming entry has:
+  // matching those on title and artist would merge two different mixes of
+  // one song on re-import.
+  //
+  // A full TrackSource table arrives with Spotify (§13), which needs raw
+  // metadata and sync state these columns cannot hold.
+  sourceProvider   String?
+  sourceExternalId String?
+
   tags String[]
 
   // Optimistic concurrency for PATCH via If-Match — plan §6.3.
@@ -319,6 +430,7 @@ model Track {
   workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   graphNodes      GraphNode[]
   setItems        SetItem[]
+  localFile       LocalFile?
   transitionsFrom Transition[] @relation("TransitionFrom")
   transitionsTo   Transition[] @relation("TransitionTo")
 
@@ -326,5 +438,8 @@ model Track {
   // (createdAt, id) is a stable, total ordering usable as a cursor.
   @@index([workspaceId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([workspaceId, bpm])
+  // Plan §7.4: unique per workspace where the external id is non-null.
+  // Postgres treats nulls as distinct, so rows without one do not collide.
+  @@unique([workspaceId, sourceProvider, sourceExternalId])
   @@map("tracks")
 }

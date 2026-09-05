@@ -17,6 +17,7 @@ import type {
   UpdateLayoutInput,
 } from "@flowgraph/contracts";
 import type { GraphNodeWithTrack, GraphRepository } from "./graph.repository.js";
+import { toTrackDto } from "../tracks/track-dto.js";
 
 /**
  * Graph domain service.
@@ -237,21 +238,6 @@ function toTransitionDto(transition: Transition): TransitionDto {
   };
 }
 
-function toTrackDto(track: Track) {
-  return {
-    id: track.id,
-    workspaceId: track.workspaceId,
-    title: track.title,
-    artist: track.artist,
-    bpm: track.bpm === null ? null : Number(track.bpm),
-    keySignature: track.keySignature,
-    timeSignature: track.timeSignature,
-    tags: track.tags,
-    version: track.version,
-    createdAt: track.createdAt.toISOString(),
-    updatedAt: track.updatedAt.toISOString(),
-  };
-}
 
 export { TRANSITION_ALGORITHM_VERSION };
 export type { GraphNode };

@@ -1,4 +1,4 @@
-import type { Set as SetRecord, Track } from "@flowgraph/db";
+import type { Set as SetRecord } from "@flowgraph/db";
 import { rankBetween, rankForMove } from "@flowgraph/domain";
 import type {
   AddSetItemInput,
@@ -10,6 +10,7 @@ import type {
   UpdateSetInput,
 } from "@flowgraph/contracts";
 import type { SetItemWithTrack, SetRepository } from "./set.repository.js";
+import { toTrackDto } from "../tracks/track-dto.js";
 
 /**
  * Set domain service.
@@ -163,18 +164,3 @@ function toItemDto(item: SetItemWithTrack): SetItemDto {
   };
 }
 
-function toTrackDto(track: Track) {
-  return {
-    id: track.id,
-    workspaceId: track.workspaceId,
-    title: track.title,
-    artist: track.artist,
-    bpm: track.bpm === null ? null : Number(track.bpm),
-    keySignature: track.keySignature,
-    timeSignature: track.timeSignature,
-    tags: track.tags,
-    version: track.version,
-    createdAt: track.createdAt.toISOString(),
-    updatedAt: track.updatedAt.toISOString(),
-  };
-}

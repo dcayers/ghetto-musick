@@ -26,20 +26,21 @@ import type {
  */
 
 /**
- * Fields the `Track` table has no column for.
+ * Fields the `Track` table still has no column for.
  *
- * Pulled out as a named constant because it is a to-do list as much as a
- * default: each entry disappears from here when the schema grows the column
- * and the adapter starts reading it.
+ * A to-do list as much as a default: each entry disappears from here when the
+ * schema grows the column and the adapter starts reading it. `genre`,
+ * `durationSeconds`, and `source` left this list when the Serato import landed
+ * — they now come from the API.
+ *
+ * `energy` and `rating` await audio analysis and a rating control; `year` has
+ * no source, since Serato does not store one.
  */
 const TRACK_FIELDS_WITHOUT_COLUMNS = {
   energy: null,
-  genre: null,
   year: null,
-  durationSeconds: null,
   rating: null,
   comment: "",
-  source: null,
   hasStems: false,
   /**
    * Empty rather than guessed. `ProvenanceMark` renders nothing for an absent
@@ -57,6 +58,12 @@ export function adaptTrack(dto: TrackDto): WorkspaceTrack {
     artist: dto.artist,
     bpm: dto.bpm,
     keySignature: dto.keySignature,
+    album: dto.album,
+    genre: dto.genre,
+    durationSeconds: dto.durationSeconds,
+    // `local` / `streaming` / `missing`, or null for a track with neither a
+    // file nor a provider — one typed in by hand.
+    source: dto.source,
     tags: dto.tags,
   };
 }

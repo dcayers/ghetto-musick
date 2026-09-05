@@ -23,3 +23,4 @@ export const HEALTH_SERVICE = Symbol.for("flowgraph.HealthService");
 export const WORKSPACE_CONTEXT = Symbol.for("flowgraph.WorkspaceContextService");
 export const GRAPH_SERVICE = Symbol.for("flowgraph.GraphService");
 export const SET_SERVICE = Symbol.for("flowgraph.SetService");
+export const IMPORT_SERVICE = Symbol.for("flowgraph.ImportService");

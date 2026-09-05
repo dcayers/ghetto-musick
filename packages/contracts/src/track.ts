@@ -53,6 +53,18 @@ export const listTracksQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+/**
+ * Whether the track's audio is reachable — plan §4.3, ADR-0010.
+ *
+ * `streaming` is a first-class state, not a degraded one: most entries in a
+ * real Serato library are streaming, and they still carry tempo, key, and
+ * length. `missing` is the one that wants attention — a file was recorded and
+ * is no longer there.
+ */
+export const trackSources = ["local", "streaming", "missing"] as const;
+export const trackSourceSchema = z.enum(trackSources);
+export type TrackSource = (typeof trackSources)[number];
+
 export const trackSchema = z.object({
   id: uuidSchema,
   workspaceId: uuidSchema,
@@ -61,6 +73,10 @@ export const trackSchema = z.object({
   bpm: z.number().nullable(),
   keySignature: z.string().nullable(),
   timeSignature: z.string().nullable(),
+  album: z.string().nullable(),
+  genre: z.string().nullable(),
+  durationSeconds: z.number().int().nullable(),
+  source: trackSourceSchema.nullable(),
   tags: z.array(z.string()),
   version: z.number().int(),
   createdAt: z.iso.datetime(),

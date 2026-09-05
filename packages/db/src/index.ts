@@ -14,8 +14,10 @@ export type {
   // an unaliased `Set` shadows the global in any file that builds one.
   Set,
   SetItem,
+  LocalFile,
+  ImportRun,
 } from "./generated/client.js";
-export { WorkspaceRole } from "./generated/enums.js";
+export { WorkspaceRole, ImportRunStatus } from "./generated/enums.js";
 
 /**
  * Database client — ADR-0008.

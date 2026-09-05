@@ -25,6 +25,7 @@ import {
   Music4,
   PanelLeftClose,
   Plus,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   X,
@@ -49,6 +50,7 @@ import {
   type LibraryFilters,
 } from "../../state/workspace.js";
 import type { WorkspaceGraphNode, WorkspaceTrack } from "../../lib/workspace-data.js";
+import { DEMO_IMPORT_HINT, useSeratoImport } from "../../state/use-serato-import.js";
 
 /**
  * The track library.
@@ -263,7 +265,6 @@ function BpmField({
 
 /* ------------------------------------------------------------------ panel -- */
 
-const IMPORT_HINT = "Library import is not wired up yet — tracks come from the existing collection.";
 
 export function LibraryPanel() {
   const tracks = useWorkspace((state) => state.tracks);
@@ -276,6 +277,7 @@ export function LibraryPanel() {
   const addTrackToGraph = useWorkspace((state) => state.addTrackToGraph);
   const announce = useWorkspace((state) => state.announce);
   const togglePanel = useWorkspace((state) => state.togglePanel);
+  const seratoImport = useSeratoImport();
 
   const placed = usePlacedTrackIds();
   const inSet = useActiveSetTrackIds();
@@ -466,10 +468,11 @@ export function LibraryPanel() {
             onPress={() => setDrawerOpen(!drawerOpen)}
           />
           <IconButton
-            icon={Plus}
-            label="Import tracks"
+            icon={seratoImport.isImporting ? RefreshCw : Plus}
+            label={seratoImport.label}
             size={14}
-            onPress={() => announce(IMPORT_HINT)}
+            isDisabled={seratoImport.isImporting}
+            onPress={seratoImport.run}
           />
           {/* The layout renders a restore rail once this is hidden; without a
               hide control here the rail is unreachable. Wide only: the compact
@@ -723,14 +726,18 @@ export function LibraryPanel() {
       <div className="border-border shrink-0 border-t p-2">
         {/* `title` sits on the wrapper because a disabled button emits no
             pointer events, so a React Aria tooltip on it would never open. */}
-        <span title={IMPORT_HINT} className="block">
+        <span
+          {...(seratoImport.isAvailable ? {} : { title: DEMO_IMPORT_HINT })}
+          className="block"
+        >
           <Button
-            isDisabled
-            aria-label={`Add tracks. ${IMPORT_HINT}`}
-            className="border-border text-ink-muted rounded-control flex w-full items-center justify-center gap-1.5 border border-dashed px-2 py-1.5 text-xs disabled:opacity-60"
+            isDisabled={!seratoImport.isAvailable || seratoImport.isImporting}
+            aria-label={seratoImport.label}
+            onPress={seratoImport.run}
+            className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control flex w-full items-center justify-center gap-1.5 border border-dashed px-2 py-1.5 text-xs transition-colors disabled:opacity-60"
           >
             <Music4 size={13} aria-hidden="true" />
-            Add Tracks
+            {seratoImport.isImporting ? "Reading library…" : "Import from Serato"}
           </Button>
         </span>
       </div>

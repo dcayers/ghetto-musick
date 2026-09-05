@@ -105,9 +105,16 @@ describe("parseLibrary", () => {
   });
 
   it("reports tags it does not map instead of hiding them", () => {
-    expect(library.unmappedTags).toContain("tlen");
+    expect(library.unmappedTags).toContain("tbit");
     expect(library.unmappedTags).toContain("ulbl");
     expect(library.unmappedTags).not.toContain("tsng");
+  });
+
+  it("reads the running time", () => {
+    // `tlen` was among the 26 tags ADR-0010 recorded as seen but unread. The
+    // timeline computes set length from it, so it is a field now.
+    expect(library.tracks[0]?.length).toBe("10:33");
+    expect(library.unmappedTags).not.toContain("tlen");
   });
 
   it("keeps every raw record on the entry", () => {

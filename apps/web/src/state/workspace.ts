@@ -167,6 +167,8 @@ interface WorkspaceState {
   /* Actions */
   /** Replaces the demo snapshot with a live graph and library page. */
   hydrateLive: (payload: LiveGraphPayload) => void;
+  /** Folds a freshly-read library page in, leaving the rest of the workspace alone. */
+  replaceTracks: (tracks: readonly WorkspaceTrack[]) => void;
   selectTrack: (trackId: string | null) => void;
   selectTransition: (transitionId: string | null) => void;
   setMultiSelection: (trackIds: readonly string[]) => void;
@@ -446,6 +448,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       saveState: "saved",
     });
   },
+
+  replaceTracks: (tracks) =>
+    set((state) => ({
+      // The new page first, so refreshed metadata wins: an import that
+      // re-read a tempo must show the new one. Existing entries follow, which
+      // keeps a graph node's inline track present even when the page it came
+      // from does not reach that far.
+      tracks: mergeTracks(tracks, state.tracks),
+    })),
 
   selectTrack: (trackId) =>
     set({

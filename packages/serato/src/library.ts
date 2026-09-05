@@ -22,6 +22,8 @@ export interface SeratoTrackEntry {
   readonly genre: string | undefined;
   readonly bpm: string | undefined;
   readonly key: string | undefined;
+  /** Running time as Serato displays it, e.g. "5:08.00". */
+  readonly length: string | undefined;
   /** Every record in the entry, including ones we do not interpret. */
   readonly records: readonly SeratoRecord[];
 }
@@ -61,6 +63,10 @@ const TRACK_FIELD_TAGS = {
   tgen: "genre",
   tbpm: "bpm",
   tkey: "key",
+  // Running time, as a display string like "5:08". Mapped because the
+  // timeline computes set length from it and the inspector shows it; ADR-0010
+  // listed it among the 26 tags seen but not read.
+  tlen: "length",
 } as const;
 
 function toTrackEntry(records: readonly SeratoRecord[]): SeratoTrackEntry {
@@ -73,6 +79,7 @@ function toTrackEntry(records: readonly SeratoRecord[]): SeratoTrackEntry {
     genre: findText(records, "tgen"),
     bpm: findText(records, "tbpm"),
     key: findText(records, "tkey"),
+    length: findText(records, "tlen"),
     records,
   };
 }

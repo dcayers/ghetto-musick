@@ -51,7 +51,7 @@ export class GraphRepository {
       // Scoped through the graph's workspace, not just by graphId — otherwise
       // a known graph id from another workspace would read its nodes.
       where: { graphId, graph: { workspaceId } },
-      include: { track: true },
+      include: { track: { include: { localFile: { select: { missing: true } } } } },
       orderBy: { createdAt: "asc" },
     });
   }
@@ -78,7 +78,7 @@ export class GraphRepository {
       where: { graphId_trackId: { graphId, trackId: input.trackId } },
       create: { id: newId(), graphId, trackId: input.trackId, x: input.x, y: input.y },
       update: {},
-      include: { track: true },
+      include: { track: { include: { localFile: { select: { missing: true } } } } },
     });
   }
 
