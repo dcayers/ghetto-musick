@@ -127,7 +127,16 @@ that interface and posts the same manifests, and nothing downstream changes.
 ```bash
 pnpm lint
 pnpm -r --workspace-concurrency=1 typecheck
+pnpm test              # unit — about a second, needs nothing
+pnpm test:integration  # repository and integration — needs Docker
 ```
+
+`pnpm test:integration` starts its own PostgreSQL through Testcontainers and
+applies the real migrations to it, so it neither touches nor depends on the
+development database from `pnpm infra:up`. It covers what a mocked Prisma
+cannot: workspace scoping reaching the `WHERE` clause, optimistic-concurrency
+rollback, the unique indexes the migrations actually produced, and whether
+Postgres orders set ranks the way the client assumes.
 
 ## Working rules
 

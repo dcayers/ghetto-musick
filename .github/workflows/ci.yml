@@ -105,8 +105,20 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Unit and integration tests
+      - name: Unit tests
         run: pnpm test
+
+      # Repository and integration layers — plan §21.1. Testcontainers starts
+      # its own PostgreSQL rather than using the service above, so the suite
+      # runs identically here and on a developer's machine, and a test cannot
+      # quietly depend on the shape of CI's database. The runner already has
+      # Docker, so this needs no extra setup.
+      #
+      # Separate from the unit step deliberately: when this fails the failure
+      # is about persistence — a scoping leak, a constraint, a transaction —
+      # and reading that off a combined run wastes the distinction.
+      - name: Integration tests
+        run: pnpm test:integration
 
       # Phase 0 exit criterion: CI provisions a real Postgres and validates a
       # migration. `migrate deploy` is the production command — never db push.
