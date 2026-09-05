@@ -79,14 +79,14 @@ export function TopNav() {
           on the true centre of the bar rather than the centre of whatever is
           left over — otherwise it drifts as the set name grows. */}
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2">
-        <span className="border-border text-ink mr-1 flex shrink-0 items-center gap-3 border-r pr-8 text-xl font-semibold">
-          <Waypoints size={20} className="text-accent" aria-hidden="true" />
+        <span className="border-border text-ink mr-1 flex shrink-0 items-center gap-3 border-r pr-8 text-headline font-semibold">
+          <Waypoints size={20} className="text-accent-text" aria-hidden="true" />
           FlowGraph
         </span>
 
         <MenuTrigger>
           <Button
-            className="text-ink-muted hover:bg-surface-raised hover:text-ink data-[pressed]:bg-surface-raised flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+            className="text-ink-muted hover:bg-surface-raised hover:text-ink data-[pressed]:bg-surface-raised flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-body transition-colors"
             aria-label={`Set: ${activeSet.name}. Switch set`}
           >
             <span className="max-w-[180px] truncate">{activeSet.name}</span>
@@ -108,12 +108,12 @@ export function TopNav() {
               <MenuItem
                 id={activeSet.id}
                 textValue={activeSet.name}
-                className="text-ink data-[focused]:bg-surface-raised flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-1.5 text-xs outline-none"
+                className="text-ink data-[focused]:bg-surface-raised flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-1.5 text-body outline-none"
               >
                 <span className="truncate">{activeSet.name}</span>
                 {/* The tick is duplicated in text: a check glyph is a shape a
                     screen reader never reaches. */}
-                <Check size={13} className="text-accent shrink-0" aria-hidden="true" />
+                <Check size={13} className="text-accent-text shrink-0" aria-hidden="true" />
                 <span className="sr-only">(current set)</span>
               </MenuItem>
 
@@ -122,7 +122,7 @@ export function TopNav() {
               <MenuItem
                 id={NEW_SET_KEY}
                 textValue="New set"
-                className="text-ink-muted data-[focused]:bg-surface-raised data-[focused]:text-ink flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs outline-none"
+                className="text-ink-muted data-[focused]:bg-surface-raised data-[focused]:text-ink flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-body outline-none"
               >
                 <Plus size={13} aria-hidden="true" />
                 New set…
@@ -157,13 +157,13 @@ export function TopNav() {
             id={id}
             className={({ isSelected }) =>
               cx(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-body transition-colors",
                 // Every option shows its label, so the label cannot be what
                 // distinguishes the active one. The ring can: it is an outline
                 // that is either present or absent, which survives greyscale
                 // where `bg-accent-muted` (1.27:1 on this surface) does not.
                 isSelected
-                  ? "bg-accent-muted text-accent ring-accent/70 font-semibold ring-1"
+                  ? "bg-accent-muted text-accent-text ring-accent/70 font-semibold ring-1"
                   : "text-ink-muted hover:text-ink font-normal",
               )
             }
@@ -174,7 +174,7 @@ export function TopNav() {
         ))}
       </ToggleButtonGroup>
 
-      <div className="flex flex-1 basis-0 items-center justify-end gap-2">
+      <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-2">
         {/* Set aggregates and the secondary actions drop below `md`. At 375px
             the bar cannot hold them, and a readout clipped to "KEY" with no
             value reads as broken — §16 says adapt rather than squeeze. Both
@@ -182,7 +182,7 @@ export function TopNav() {
             these actions are all currently unavailable anyway. */}
         <dl className="hidden items-center gap-3 md:flex">
           <div className="flex items-center gap-1.5">
-            <dt className="text-ink-subtle text-[10px] font-medium tracking-wide uppercase">
+            <dt className="text-ink-subtle text-section font-medium uppercase">
               BPM
             </dt>
             {/* Reuses the shared primitives so a BPM reads the same here as on
@@ -197,7 +197,7 @@ export function TopNav() {
               absent one reads as "this set has no declared key". */}
           {activeSet.targetKey !== "" && (
             <div className="flex items-center gap-1.5">
-              <dt className="text-ink-subtle text-[10px] font-medium tracking-wide uppercase">
+              <dt className="text-ink-subtle text-section font-medium uppercase">
                 Key
               </dt>
               <dd>
@@ -223,7 +223,7 @@ export function TopNav() {
 
         <Button
           onPress={() => announce("Export is not available yet")}
-          className="border-border-strong text-ink-muted hover:border-accent/60 hover:text-ink rounded-control hidden items-center gap-1.5 border px-2.5 py-1.5 text-xs transition-colors md:flex"
+          className="border-border-strong text-ink-muted hover:border-accent/60 hover:text-ink rounded-control hidden items-center gap-1.5 border px-2.5 py-1.5 text-body transition-colors md:flex"
         >
           <Download size={14} aria-hidden="true" />
           Export
@@ -238,7 +238,19 @@ export function TopNav() {
           // Accessible name keeps the visible word first so voice control
           // ("click Play") still targets it — WCAG 2.5.3.
           aria-label={isPlaying ? "Pause playback" : "Play set"}
-          className="bg-accent hover:bg-accent-hover flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white transition-colors"
+          /*
+           * Demoted from a filled accent button to the same outline treatment
+           * Export uses.
+           *
+           * It was the single filled accent surface in the workspace — the
+           * loudest thing on screen — and it drives no audio: there is no
+           * transport behind it, and §3.4 puts playback out of scope. Violet
+           * means selection (The One Voice Rule), and this is neither selected
+           * nor the primary action. The control stays, because the roadmap is
+           * meant to stay visible; the emphasis does not, because emphasis is
+           * a claim about importance and this one was false.
+           */
+          className="border-border-strong text-ink-muted hover:border-accent/60 hover:text-ink rounded-control flex items-center gap-1.5 border px-2.5 py-1.5 text-body transition-colors"
         >
           {isPlaying ? (
             <Pause size={14} className="fill-current" aria-hidden="true" />

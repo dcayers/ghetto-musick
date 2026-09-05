@@ -264,15 +264,15 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
       <header className="bg-surface border-border sticky top-0 z-10 flex items-start gap-3 border-b p-3">
         <Artwork seed={track.id} size={48} />
         <div className="min-w-0 flex-1">
-          <Truncate className="text-ink text-sm font-medium">{track.title}</Truncate>
-          <Truncate className="text-ink-muted text-xs">{track.artist}</Truncate>
+          <Truncate className="text-ink text-title font-medium">{track.title}</Truncate>
+          <Truncate className="text-ink-muted text-body">{track.artist}</Truncate>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="flex items-baseline gap-1">
               <Bpm value={track.bpm} />
-              {track.bpm !== null && <span className="text-bpm text-[10px]">BPM</span>}
+              {track.bpm !== null && <span className="text-bpm text-meta">BPM</span>}
             </span>
             <CamelotKey value={track.keySignature} />
-            <span className="text-ink-subtle flex items-center gap-1 text-[10px]">
+            <span className="text-ink-subtle flex items-center gap-1 text-meta">
               <SourceDot source={track.source} />
               {track.source === null ? "No file record" : SOURCE_SHORT[track.source]}
             </span>
@@ -301,7 +301,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
           positionSeconds={position}
           onSeek={setPosition}
         />
-        <div className="text-ink-subtle mt-1.5 flex items-center justify-between gap-2 font-mono text-[10px] tabular-nums">
+        <div className="text-ink-subtle mt-1.5 flex items-center justify-between gap-2 font-mono text-meta tabular-nums">
           <span>{formatDuration(position)}</span>
           <span>{formatDuration(track.durationSeconds)}</span>
         </div>
@@ -331,7 +331,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
             // which clips an input and its focus ring — so editing takes the
             // full row width instead of squeezing into the right-hand column.
             <div className="py-[3px]">
-              <dt className="text-ink-subtle mb-1 text-[11px]">Comment</dt>
+              <dt className="text-ink-subtle mb-1 text-label">Comment</dt>
               <dd>
                 <TextField
                   aria-label="Track comment"
@@ -352,7 +352,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                   }}
                   className="w-full"
                 >
-                  <Input className="border-border bg-surface-raised text-ink focus:border-accent w-full rounded border px-1.5 py-1 text-[11px] outline-none" />
+                  <Input className="border-border bg-surface-raised text-ink focus:border-accent w-full rounded border px-1.5 py-1 text-label outline-none" />
                 </TextField>
               </dd>
             </div>
@@ -364,7 +364,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                   setIsEditingComment(true);
                 }}
                 aria-label="Edit comment"
-                className="text-ink hover:text-accent flex min-w-0 items-center gap-1"
+                className="text-ink hover:text-accent-text flex min-w-0 items-center gap-1"
               >
                 <span className="min-w-0 truncate" title={comment || "Add a comment"}>
                   {comment || "Add a comment"}
@@ -399,12 +399,12 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                     the input's accessible name both carry the identity. */}
                 <span
                   aria-hidden="true"
-                  className="text-canvas grid size-4 shrink-0 place-items-center rounded text-[9px] font-semibold"
+                  className="text-canvas grid size-5 shrink-0 place-items-center rounded-control text-meta font-semibold"
                   style={{ background: cue.color }}
                 >
                   {index + 1}
                 </span>
-                <span className="text-ink-muted shrink-0 font-mono text-[11px] tabular-nums">
+                <span className="text-ink-muted shrink-0 font-mono text-label tabular-nums">
                   {timestamp}
                 </span>
                 <TextField
@@ -413,7 +413,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                   onChange={(value) => updateCue(cue.key, { label: value })}
                   className="min-w-[5rem] flex-1"
                 >
-                  <Input className="border-border/0 hover:border-border focus:border-accent text-ink w-full rounded border bg-transparent px-1 py-0.5 text-[11px] outline-none" />
+                  <Input className="border-border/0 hover:border-border focus:border-accent text-ink w-full rounded border bg-transparent px-1 py-0.5 text-label outline-none" />
                 </TextField>
                 <Pill tone={status.tone}>{status.label}</Pill>
                 {cue.status === "suggested" && (
@@ -442,7 +442,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
 
       <Section id="track-stems" title="Stems">
         {stemsUnavailable && (
-          <p className="text-ink-subtle mb-2 text-[11px] leading-relaxed">
+          <p className="text-ink-subtle mb-2 text-label leading-relaxed">
             No separated stems for this track. Separation needs a local file and an analysis pass,
             so the controls below are inactive.
           </p>
@@ -453,7 +453,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
               {/* MiniToggle's visible glyph is one letter, so the row group
                   supplies the context around the per-control description. */}
               <Group aria-label={`${stem.name} stem`} className="flex items-center gap-1.5">
-                <span className="text-ink-muted w-12 shrink-0 truncate text-[11px]">
+                <span className="text-ink-muted w-12 shrink-0 truncate text-label">
                   {stem.name}
                 </span>
                 <MiniToggle
@@ -495,7 +495,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                 />
               </Group>
               {stem.expanded && (
-                <p className="text-ink-subtle pl-[3.25rem] text-[10px] tabular-nums">
+                <p className="text-ink-subtle pl-[3.25rem] text-meta tabular-nums">
                   Level {Math.round(stem.level * 100)}%
                 </p>
               )}
@@ -506,7 +506,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
 
       <Section id="track-suggestions" title="Suggested Transitions">
         {suggestions.length === 0 ? (
-          <p className="text-ink-subtle text-[11px]">No other tracks to compare against.</p>
+          <p className="text-ink-subtle text-label">No other tracks to compare against.</p>
         ) : (
           <>
             <ul className="flex flex-col gap-0.5">
@@ -525,7 +525,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                         aria-hidden="true"
                       />
                       <div className="min-w-0 flex-1">
-                        <Truncate className="text-ink text-[11px]">{candidate.title}</Truncate>
+                        <Truncate className="text-ink text-label">{candidate.title}</Truncate>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1">
                           <Bpm value={candidate.bpm} />
                           <CamelotKey value={candidate.keySignature} />
@@ -547,7 +547,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                             style={{ width: `${percent}%`, background: band.fill }}
                           />
                         </span>
-                        <span className={cx("font-mono text-[11px] tabular-nums", band.text)}>
+                        <span className={cx("font-mono text-label tabular-nums", band.text)}>
                           {percent}%
                         </span>
                       </span>
@@ -557,7 +557,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
                         keyboard and on touch, and the warning is the reason a
                         high score can still be a bad idea. */}
                     {score.warnings.length > 0 && (
-                      <ul className="text-warn mt-0.5 pl-5 text-[10px]">
+                      <ul className="text-warn mt-0.5 pl-5 text-meta">
                         {score.warnings.map((warning) => (
                           <li key={warning}>{warning}</li>
                         ))}
@@ -570,7 +570,7 @@ function InspectorBody({ track }: { track: WorkspaceTrack }) {
 
             <Button
               onPress={() => setShowAllSuggestions((value) => !value)}
-              className="border-border text-ink-muted hover:bg-surface-raised hover:text-ink mt-2 w-full rounded-md border px-2 py-1.5 text-[11px]"
+              className="border-border text-ink-muted hover:bg-surface-raised hover:text-ink mt-2 w-full rounded-md border px-2 py-1.5 text-label"
             >
               {showAllSuggestions
                 ? `Show top ${COLLAPSED_SUGGESTIONS}`

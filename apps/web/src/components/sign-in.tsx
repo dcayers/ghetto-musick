@@ -37,16 +37,16 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   };
 
   const field =
-    "border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent w-full rounded-md border px-3 py-2 text-sm outline-none";
+    "border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent w-full rounded-md border px-3 py-2 text-body outline-none";
 
   return (
     <div className="flex h-full items-center justify-center p-6">
       <form
         onSubmit={submit}
-        className="border-border bg-surface w-full max-w-sm rounded-xl border p-6"
+        className="border-border bg-surface w-full max-w-sm rounded-panel border p-6"
       >
-        <h1 className="text-ink text-lg font-semibold">FlowGraph</h1>
-        <p className="text-ink-muted mt-1 mb-5 text-sm">
+        <h1 className="text-ink text-headline font-semibold">FlowGraph</h1>
+        <p className="text-ink-muted mt-1 mb-5 text-body">
           {mode === "sign-in"
             ? "Sign in to your library."
             : "Create an account — a personal workspace is set up for you."}
@@ -55,7 +55,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         <div className="flex flex-col gap-3">
           {mode === "sign-up" && (
             <TextField value={name} onChange={setName} className="flex flex-col gap-1">
-              <Label className="text-ink-muted text-xs">Name</Label>
+              <Label className="text-ink-muted text-body">Name</Label>
               <Input className={field} autoComplete="name" />
             </TextField>
           )}
@@ -67,7 +67,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             isRequired
             className="flex flex-col gap-1"
           >
-            <Label className="text-ink-muted text-xs">Email</Label>
+            <Label className="text-ink-muted text-body">Email</Label>
             <Input className={field} autoComplete="email" />
           </TextField>
 
@@ -78,19 +78,19 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             isRequired
             className="flex flex-col gap-1"
           >
-            <Label className="text-ink-muted text-xs">Password</Label>
+            <Label className="text-ink-muted text-body">Password</Label>
             <Input
               className={field}
               autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             />
             {mode === "sign-up" && (
-              <span className="text-ink-subtle text-[11px]">At least 12 characters.</span>
+              <span className="text-ink-subtle text-label">At least 12 characters.</span>
             )}
           </TextField>
         </div>
 
         {error && (
-          <p role="alert" className="text-danger mt-3 text-xs">
+          <p role="alert" className="text-danger mt-3 text-body">
             {error}
           </p>
         )}
@@ -98,7 +98,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         <Button
           type="submit"
           isDisabled={busy}
-          className="bg-accent hover:bg-accent-hover mt-5 w-full rounded-md px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="bg-accent-strong hover:bg-accent mt-5 w-full rounded-control px-3 py-2 text-body font-medium text-white disabled:opacity-60"
         >
           {busy ? "Working…" : mode === "sign-in" ? "Sign in" : "Create account"}
         </Button>
@@ -108,7 +108,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             setMode(mode === "sign-in" ? "sign-up" : "sign-in");
             setError(null);
           }}
-          className="text-ink-muted hover:text-ink mt-3 w-full text-center text-xs"
+          className="text-ink-muted hover:text-ink mt-3 w-full text-center text-body"
         >
           {mode === "sign-in"
             ? "No account? Create one"

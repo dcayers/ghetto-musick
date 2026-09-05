@@ -196,12 +196,12 @@ function FilterSelect({
         className={
           hideLabel
             ? "sr-only"
-            : "text-ink-subtle text-[10px] font-medium tracking-wide uppercase"
+            : "text-ink-subtle text-section font-medium uppercase"
         }
       >
         {label}
       </Label>
-      <Button className="border-border bg-surface-raised text-ink hover:border-border-strong rounded-control flex w-full items-center justify-between gap-1 border px-2 py-1 text-xs transition-colors">
+      <Button className="border-border bg-surface-raised text-ink hover:border-border-strong rounded-control flex w-full items-center justify-between gap-1 border px-2 py-1 text-body transition-colors">
         <SelectValue className="min-w-0 truncate" />
         <ChevronDown size={13} className="text-ink-subtle shrink-0" aria-hidden="true" />
       </Button>
@@ -212,7 +212,7 @@ function FilterSelect({
               key={option.id}
               id={option.id}
               textValue={option.label}
-              className="text-ink data-[focused]:bg-surface-raised flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-xs outline-none"
+              className="text-ink data-[focused]:bg-surface-raised flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-body outline-none"
             >
               {({ isSelected }) => (
                 <>
@@ -220,7 +220,7 @@ function FilterSelect({
                   {/* A tick, not a tint: §17 forbids the current option being
                       distinguishable by hue alone. */}
                   {isSelected && (
-                    <Check size={12} className="text-accent shrink-0" aria-hidden="true" />
+                    <Check size={12} className="text-accent-text shrink-0" aria-hidden="true" />
                   )}
                 </>
               )}
@@ -252,12 +252,12 @@ function BpmField({
       formatOptions={{ maximumFractionDigits: 0, useGrouping: false }}
       className="flex min-w-0 flex-col gap-1"
     >
-      <Label className="text-ink-subtle text-[10px] font-medium tracking-wide uppercase">
+      <Label className="text-ink-subtle text-section font-medium uppercase">
         {label}
       </Label>
       <Input
         placeholder="—"
-        className="border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent rounded-control w-full border px-2 py-1 text-xs tabular-nums outline-none"
+        className="border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent rounded-control w-full border px-2 py-1 text-body tabular-nums outline-none"
       />
     </NumberField>
   );
@@ -441,7 +441,7 @@ export function LibraryPanel() {
       title={
         <span className="flex items-baseline gap-2">
           Library
-          <span className="text-ink-subtle text-[11px] font-normal tabular-nums">
+          <span className="text-ink-subtle text-label font-normal tabular-nums">
             {total} {total === 1 ? "track" : "tracks"}
           </span>
         </span>
@@ -501,7 +501,7 @@ export function LibraryPanel() {
             <Label className="sr-only">Search tracks by title or artist</Label>
             <Input
               placeholder="Search title or artist…"
-              className="border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent rounded-control w-full border py-1.5 pr-7 pl-2 text-xs outline-none"
+              className="border-border bg-surface-raised text-ink placeholder:text-ink-subtle focus:border-accent rounded-control w-full border py-1.5 pr-7 pl-2 text-body outline-none"
             />
             {filters.query && (
               <Button
@@ -569,7 +569,7 @@ export function LibraryPanel() {
           <Button
             isDisabled={!filtered}
             onPress={resetFilters}
-            className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control flex w-full items-center justify-center gap-1.5 border px-2 py-1 text-[11px] transition-colors disabled:opacity-40"
+            className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control flex w-full items-center justify-center gap-1.5 border px-2 py-1 text-label transition-colors disabled:opacity-40"
           >
             <X size={12} aria-hidden="true" />
             Clear filters
@@ -596,7 +596,7 @@ export function LibraryPanel() {
                 actions: (
                   <Button
                     onPress={resetFilters}
-                    className="border-border text-ink-muted hover:text-ink rounded-control border px-2 py-1 text-xs"
+                    className="border-border text-ink-muted hover:text-ink rounded-control border px-2 py-1 text-body"
                   >
                     Clear filters
                   </Button>
@@ -672,10 +672,10 @@ export function LibraryPanel() {
                       <Artwork seed={track.id} size={44} />
 
                       <span className="flex min-w-0 flex-1 flex-col gap-px">
-                        <Truncate className="text-ink text-xs leading-4 font-medium">
+                        <Truncate className="text-ink text-body leading-4 font-medium">
                           {track.title}
                         </Truncate>
-                        <Truncate className="text-ink-muted text-[11px] leading-[13px]">
+                        <Truncate className="text-ink-muted text-label leading-[13px]">
                           {track.artist}
                         </Truncate>
                         <Waveform
@@ -734,7 +734,7 @@ export function LibraryPanel() {
             isDisabled={!seratoImport.isAvailable || seratoImport.isImporting}
             aria-label={seratoImport.label}
             onPress={seratoImport.run}
-            className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control flex w-full items-center justify-center gap-1.5 border border-dashed px-2 py-1.5 text-xs transition-colors disabled:opacity-60"
+            className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control flex w-full items-center justify-center gap-1.5 border border-dashed px-2 py-1.5 text-body transition-colors disabled:opacity-60"
           >
             <Music4 size={13} aria-hidden="true" />
             {seratoImport.isImporting ? "Reading library…" : "Import from Serato"}

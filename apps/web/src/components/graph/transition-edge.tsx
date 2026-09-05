@@ -3,6 +3,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  useStore,
   type Edge,
   type EdgeProps,
 } from "@xyflow/react";
@@ -28,10 +29,22 @@ import { cx } from "../primitives.js";
 export interface TransitionEdgeData extends Record<string, unknown> {
   readonly transitionId: string;
   readonly technique: string;
+  /** Lateral offset among parallel routes on the same pair: 0, then alternating outward. */
+  readonly parallelOffset: number;
   readonly inActiveSet: boolean;
   readonly isAiSuggested: boolean;
   readonly hasWarning: boolean;
 }
+
+/**
+ * Zoom below which the label stops shrinking with the canvas.
+ *
+ * Mirrors `SIMPLIFY_BELOW_ZOOM` in graph-canvas.tsx deliberately rather than
+ * importing it: graph-canvas imports this module, so the dependency would be
+ * circular. Kept equal so a node dropping to its simplified chip and a label
+ * reaching its floor happen at the same moment.
+ */
+const LABEL_ZOOM_FLOOR = 0.45;
 
 /** Which of the three visual weights an edge is drawn at. */
 type EdgeWeight = "selected" | "set" | "alt";
@@ -66,6 +79,9 @@ export const TransitionEdge = memo(function TransitionEdge({
   targetY,
   targetPosition,
 }: EdgeProps<Edge<TransitionEdgeData>>) {
+  // `transform[2]` is the viewport scale. Subscribing to just that number keeps
+  // a pan from re-rendering every edge on the canvas.
+  const zoom = useStore((state) => state.transform[2]);
   const transitionId = data?.transitionId ?? null;
   const selectTransition = useWorkspace((state) => state.selectTransition);
   // Read the transition rather than widening `data`: bars, endpoints, and
@@ -77,6 +93,10 @@ export const TransitionEdge = memo(function TransitionEdge({
       : (state.transitions.find((tx) => tx.id === transitionId) ?? null),
   );
 
+  // Parallel routes bow apart. Curvature rather than a translated copy, so
+  // both still meet their handles exactly and the arcs read as alternatives
+  // between the same two tracks rather than as edges to somewhere else.
+  const offset = data?.parallelOffset ?? 0;
   const [path, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -84,6 +104,7 @@ export const TransitionEdge = memo(function TransitionEdge({
     targetX,
     targetY,
     targetPosition,
+    curvature: 0.25 + offset * 0.45,
   });
 
   const spec = techniqueSpec(data?.technique ?? "blend");
@@ -170,7 +191,20 @@ export const TransitionEdge = memo(function TransitionEdge({
           className="nodrag nopan absolute flex items-center gap-1"
           onClick={(event) => event.stopPropagation()}
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            /*
+             * Counter-scaled against the viewport.
+             *
+             * `EdgeLabelRenderer` portals *inside* React Flow's transformed
+             * viewport, so an 11px label renders at 11 × zoom. The canvas
+             * allows zoom down to 0.1 and `fitView` opens below 1.0 whenever
+             * the graph does not fit — so the technique labels routinely
+             * opened at two or three pixels. Nodes already have a fallback for
+             * this (they drop to a simplified chip below 0.45); edges had none.
+             *
+             * Only ever scaled *up*, never down: past 1.0 the label is already
+             * legible and enlarging it would swamp the canvas.
+             */
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px) scale(${Math.min(1 / zoom, 1 / LABEL_ZOOM_FLOOR)})`,
             pointerEvents: "all",
           }}
         >
@@ -181,16 +215,26 @@ export const TransitionEdge = memo(function TransitionEdge({
             }}
             aria-label={ariaLabel}
             className={cx(
-              "bg-canvas/75 flex items-center gap-1 rounded px-1 py-px text-[11px] font-medium whitespace-nowrap",
+              "bg-canvas/75 flex items-center gap-1 rounded px-1 py-px text-label font-medium whitespace-nowrap",
               selected && "ring-accent ring-1",
             )}
             style={{
               // Dynamic per technique, so it cannot come from a utility class.
               color,
-              opacity: weight === "alt" ? 0.72 : 1,
+              /*
+               * The label is never dimmed.
+               *
+               * An alternative route is signalled by its stroke — 1.5px at 45%
+               * opacity — and that is the whole of the signal. Fading the label
+               * as well pushed three of the six technique hues under AA (cut
+               * and effect to ~4.3, the unmapped fallback to 2.68), and the
+               * label is the greyscale-survivable half of the triple encoding
+               * that PRODUCT.md requires. Quietening the route is the point;
+               * quietening the word for it is not.
+               */
             }}
           >
-            {isAiSuggested && <Sparkles size={9} aria-hidden="true" className="text-accent" />}
+            {isAiSuggested && <Sparkles size={9} aria-hidden="true" className="text-accent-text" />}
             {spec.label}
           </Button>
 

@@ -1,0 +1,569 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T00:00:00.000Z",
+  "title": "Design System: FlowGraph",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Violet",
+        "canonical": "#7c5cff",
+        "tonalRamp": [
+          "oklch(0.18 0.08 285)",
+          "oklch(0.27 0.12 285)",
+          "oklch(0.36 0.16 285)",
+          "oklch(0.45 0.20 285)",
+          "oklch(0.55 0.22 285)",
+          "oklch(0.67 0.18 285)",
+          "oklch(0.80 0.11 285)",
+          "oklch(0.93 0.04 285)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Chart Black",
+        "canonical": "#08080c",
+        "tonalRamp": [
+          "oklch(0.13 0.008 285)",
+          "oklch(0.18 0.008 285)",
+          "oklch(0.24 0.008 285)",
+          "oklch(0.32 0.008 285)",
+          "oklch(0.44 0.008 285)",
+          "oklch(0.60 0.008 285)",
+          "oklch(0.78 0.006 285)",
+          "oklch(0.95 0.003 285)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Panel Black",
+        "canonical": "#0e0e14",
+        "tonalRamp": [
+          "oklch(0.15 0.010 285)",
+          "oklch(0.20 0.010 285)",
+          "oklch(0.27 0.010 285)",
+          "oklch(0.35 0.010 285)",
+          "oklch(0.46 0.010 285)",
+          "oklch(0.62 0.009 285)",
+          "oklch(0.79 0.006 285)",
+          "oklch(0.95 0.003 285)"
+        ]
+      },
+      "surface-card": {
+        "role": "neutral",
+        "displayName": "Card Black",
+        "canonical": "#191922",
+        "tonalRamp": [
+          "oklch(0.16 0.012 285)",
+          "oklch(0.22 0.012 285)",
+          "oklch(0.29 0.012 285)",
+          "oklch(0.37 0.012 285)",
+          "oklch(0.48 0.012 285)",
+          "oklch(0.63 0.010 285)",
+          "oklch(0.80 0.007 285)",
+          "oklch(0.95 0.003 285)"
+        ]
+      },
+      "surface-selected": {
+        "role": "neutral",
+        "displayName": "Selected Violet-Black",
+        "canonical": "#1e1830",
+        "tonalRamp": [
+          "oklch(0.17 0.035 292)",
+          "oklch(0.23 0.045 292)",
+          "oklch(0.31 0.055 292)",
+          "oklch(0.40 0.065 292)",
+          "oklch(0.51 0.070 292)",
+          "oklch(0.65 0.055 292)",
+          "oklch(0.81 0.032 292)",
+          "oklch(0.95 0.012 292)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#f2f2f7",
+        "tonalRamp": [
+          "oklch(0.20 0.006 285)",
+          "oklch(0.31 0.006 285)",
+          "oklch(0.42 0.006 285)",
+          "oklch(0.53 0.006 285)",
+          "oklch(0.64 0.006 285)",
+          "oklch(0.76 0.005 285)",
+          "oklch(0.87 0.005 285)",
+          "oklch(0.96 0.004 285)"
+        ]
+      },
+      "bpm": {
+        "role": "secondary",
+        "displayName": "Beacon Blue",
+        "canonical": "#6ea8fe",
+        "tonalRamp": [
+          "oklch(0.22 0.06 258)",
+          "oklch(0.32 0.09 258)",
+          "oklch(0.42 0.12 258)",
+          "oklch(0.52 0.14 258)",
+          "oklch(0.62 0.15 258)",
+          "oklch(0.72 0.13 258)",
+          "oklch(0.84 0.08 258)",
+          "oklch(0.94 0.03 258)"
+        ]
+      },
+      "key": {
+        "role": "secondary",
+        "displayName": "Key Rose",
+        "canonical": "#f472b6",
+        "tonalRamp": [
+          "oklch(0.24 0.08 355)",
+          "oklch(0.34 0.12 355)",
+          "oklch(0.44 0.16 355)",
+          "oklch(0.54 0.19 355)",
+          "oklch(0.64 0.20 355)",
+          "oklch(0.74 0.16 355)",
+          "oklch(0.85 0.10 355)",
+          "oklch(0.95 0.04 355)"
+        ]
+      },
+      "energy-1": {
+        "role": "tertiary",
+        "displayName": "Energy 1 — Cool Sky",
+        "canonical": "#22b8f0",
+        "tonalRamp": [
+          "oklch(0.24 0.07 232)",
+          "oklch(0.34 0.10 232)",
+          "oklch(0.44 0.13 232)",
+          "oklch(0.54 0.15 232)",
+          "oklch(0.65 0.15 232)",
+          "oklch(0.76 0.12 232)",
+          "oklch(0.86 0.08 232)",
+          "oklch(0.95 0.03 232)"
+        ]
+      },
+      "energy-3": {
+        "role": "tertiary",
+        "displayName": "Energy 3 — Mid Lime",
+        "canonical": "#a3e635",
+        "tonalRamp": [
+          "oklch(0.26 0.09 125)",
+          "oklch(0.36 0.13 125)",
+          "oklch(0.46 0.16 125)",
+          "oklch(0.57 0.19 125)",
+          "oklch(0.68 0.20 125)",
+          "oklch(0.79 0.17 125)",
+          "oklch(0.88 0.11 125)",
+          "oklch(0.96 0.04 125)"
+        ]
+      },
+      "energy-5": {
+        "role": "tertiary",
+        "displayName": "Energy 5 — Hot Coral",
+        "canonical": "#fb7185",
+        "tonalRamp": [
+          "oklch(0.24 0.09 18)",
+          "oklch(0.34 0.13 18)",
+          "oklch(0.44 0.17 18)",
+          "oklch(0.54 0.19 18)",
+          "oklch(0.65 0.19 18)",
+          "oklch(0.76 0.15 18)",
+          "oklch(0.86 0.09 18)",
+          "oklch(0.95 0.03 18)"
+        ]
+      },
+      "tx-blend": {
+        "role": "tertiary",
+        "displayName": "Blend Cyan",
+        "canonical": "#22d3ee",
+        "tonalRamp": [
+          "oklch(0.25 0.06 205)",
+          "oklch(0.35 0.09 205)",
+          "oklch(0.45 0.11 205)",
+          "oklch(0.56 0.13 205)",
+          "oklch(0.67 0.13 205)",
+          "oklch(0.78 0.11 205)",
+          "oklch(0.87 0.07 205)",
+          "oklch(0.96 0.03 205)"
+        ]
+      },
+      "tx-effect": {
+        "role": "tertiary",
+        "displayName": "Effect Orchid",
+        "canonical": "#c084fc",
+        "tonalRamp": [
+          "oklch(0.24 0.09 305)",
+          "oklch(0.34 0.13 305)",
+          "oklch(0.44 0.17 305)",
+          "oklch(0.54 0.20 305)",
+          "oklch(0.65 0.19 305)",
+          "oklch(0.76 0.15 305)",
+          "oklch(0.86 0.09 305)",
+          "oklch(0.95 0.03 305)"
+        ]
+      },
+      "tx-cut": {
+        "role": "tertiary",
+        "displayName": "Cut Coral",
+        "canonical": "#e879f9",
+        "tonalRamp": [
+          "oklch(0.24 0.09 18)",
+          "oklch(0.34 0.13 18)",
+          "oklch(0.44 0.17 18)",
+          "oklch(0.54 0.19 18)",
+          "oklch(0.65 0.19 18)",
+          "oklch(0.76 0.15 18)",
+          "oklch(0.86 0.09 18)",
+          "oklch(0.95 0.03 18)"
+        ]
+      },
+      "ok": {
+        "role": "neutral",
+        "displayName": "Ok Green",
+        "canonical": "#34d399",
+        "tonalRamp": [
+          "oklch(0.25 0.06 165)",
+          "oklch(0.35 0.09 165)",
+          "oklch(0.45 0.11 165)",
+          "oklch(0.56 0.13 165)",
+          "oklch(0.67 0.13 165)",
+          "oklch(0.78 0.11 165)",
+          "oklch(0.87 0.07 165)",
+          "oklch(0.96 0.03 165)"
+        ]
+      },
+      "warn": {
+        "role": "neutral",
+        "displayName": "Warn Amber",
+        "canonical": "#fbbf24",
+        "tonalRamp": [
+          "oklch(0.28 0.06 85)",
+          "oklch(0.38 0.09 85)",
+          "oklch(0.48 0.12 85)",
+          "oklch(0.58 0.14 85)",
+          "oklch(0.69 0.15 85)",
+          "oklch(0.80 0.13 85)",
+          "oklch(0.89 0.08 85)",
+          "oklch(0.96 0.03 85)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Danger Red",
+        "canonical": "#f87171",
+        "tonalRamp": [
+          "oklch(0.24 0.08 25)",
+          "oklch(0.34 0.12 25)",
+          "oklch(0.44 0.15 25)",
+          "oklch(0.54 0.17 25)",
+          "oklch(0.65 0.17 25)",
+          "oklch(0.76 0.14 25)",
+          "oklch(0.86 0.08 25)",
+          "oklch(0.95 0.03 25)"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Accent Text",
+        "canonical": "#9b86ff",
+        "tonalRamp": [
+          "oklch(0.20 0.07 285)",
+          "oklch(0.29 0.11 285)",
+          "oklch(0.38 0.15 285)",
+          "oklch(0.48 0.18 285)",
+          "oklch(0.58 0.19 285)",
+          "oklch(0.70 0.15 285)",
+          "oklch(0.82 0.09 285)",
+          "oklch(0.94 0.03 285)"
+        ]
+      },
+      "accent-strong": {
+        "role": "primary",
+        "displayName": "Accent Strong",
+        "canonical": "#6a49f2",
+        "tonalRamp": [
+          "oklch(0.16 0.09 285)",
+          "oklch(0.25 0.14 285)",
+          "oklch(0.34 0.18 285)",
+          "oklch(0.43 0.22 285)",
+          "oklch(0.52 0.24 285)",
+          "oklch(0.65 0.19 285)",
+          "oklch(0.79 0.12 285)",
+          "oklch(0.93 0.04 285)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The FlowGraph wordmark and the sign-in heading only. The two places that are not the instrument."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel headers and track-node titles. The largest type inside any working surface."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls, menu items, library rows, form inputs. The default."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Artist names, metadata fields, inspector values, secondary rows."
+      },
+      "label-section": {
+        "displayName": "Section Label",
+        "purpose": "Collapsible section headers and field labels. The only uppercase in the system."
+      },
+      "numeric": {
+        "displayName": "Numeric",
+        "purpose": "BPM, key, durations, positions, counts. Monospaced and tab-aligned because they are compared down a column."
+      },
+      "num": {
+        "displayName": "Numeric",
+        "purpose": "BPM, key, durations, positions. Monospaced and tab-aligned, including the em dash for an unknown value."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Units, durations, footnotes, counter badges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "drag",
+        "value": "0 25px 50px -12px rgb(0 0 0 / 0.6)",
+        "purpose": "A node under the cursor — the only moment an element is literally in the air."
+      },
+      {
+        "name": "drag-simplified",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.6)",
+        "purpose": "The same drag event at low zoom, where the chip is smaller."
+      },
+      {
+        "name": "selected",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.4)",
+        "purpose": "A selected node sits slightly proud of its neighbours."
+      },
+      {
+        "name": "multi-selected",
+        "value": "0 4px 6px -1px rgb(0 0 0 / 0.3)",
+        "purpose": "A group member — lifted, but less than the primary selection."
+      },
+      {
+        "name": "popover",
+        "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
+        "purpose": "Menus and select popovers, which float over everything."
+      },
+      {
+        "name": "tooltip",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+        "purpose": "The lightest floating surface."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "120ms ease",
+        "purpose": "Handle opacity, scale, and border-colour on graph nodes. The system's only named duration."
+      },
+      {
+        "name": "colors-default",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Tailwind's transition-colors default, used on every hover and active state."
+      },
+      {
+        "name": "tooltip-delay",
+        "value": "400ms open / 0ms close",
+        "purpose": "Hint tooltips wait before opening and dismiss instantly."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Under prefers-reduced-motion every animation and transition is collapsed, including React Flow's pan and zoom."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "0px"
+      },
+      {
+        "name": "medium",
+        "value": "768px"
+      },
+      {
+        "name": "wide",
+        "value": "1280px"
+      }
+    ],
+    "density": [
+      {
+        "name": "default",
+        "purpose": "The desk. The base role scale."
+      },
+      {
+        "name": "booth",
+        "purpose": "One step up the same scale with the ink ramp opened up, set via data-density on the root. For reading at arm's length in a dark booth."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one committed action on a screen. The only filled accent surface in the product. Three sites exist today (sign-in submit, empty-state actions, and the top-bar Play control); Play is recorded drift, not precedent.",
+      "html": "<button class=\"ds-btn-primary\">Create account</button>",
+      "css": ".ds-btn-primary { background: var(--color-accent, #7c5cff); color: #fff; font: 500 12px/1.35 ui-sans-serif, system-ui, sans-serif; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { background: var(--color-accent-hover, #8f73ff); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-accent, #7c5cff); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.6; cursor: default; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The workhorse control. Outlined over near-black; the border firms up on hover.",
+      "html": "<button class=\"ds-btn-outline\">Import from Serato</button>",
+      "css": ".ds-btn-outline { background: var(--color-surface-raised, #14141c); color: var(--color-ink-muted, #9d9dae); font: 400 11px/1.35 ui-sans-serif, system-ui, sans-serif; padding: 4px 8px; border: 1px solid var(--color-border, #21212c); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: color 150ms, border-color 150ms; } .ds-btn-outline:hover { border-color: var(--color-border-strong, #2e2e3c); color: var(--color-ink, #f2f2f7); } .ds-btn-outline:focus-visible { outline: 2px solid var(--color-accent, #7c5cff); outline-offset: 2px; } .ds-btn-outline:disabled { opacity: 0.4; cursor: default; }"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "28px square. Transparent at rest, fills on hover. The active state adds a ring because the violet fill alone is ~1.3:1 and cannot survive greyscale.",
+      "html": "<div style=\"display:flex;gap:6px;align-items:center\"><button class=\"ds-icon-btn\" aria-label=\"Undo\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11\"/></svg></button><button class=\"ds-icon-btn ds-icon-btn--active\" aria-label=\"Settings\" aria-pressed=\"true\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/></svg></button></div>",
+      "css": ".ds-icon-btn { width: 28px; height: 28px; display: grid; place-items: center; background: transparent; color: var(--color-ink-muted, #9d9dae); border: none; border-radius: 6px; cursor: pointer; transition: background 150ms, color 150ms; } .ds-icon-btn:hover { background: var(--color-surface-hover, #20202b); color: var(--color-ink, #f2f2f7); } .ds-icon-btn:focus-visible { outline: 2px solid var(--color-accent, #7c5cff); outline-offset: 2px; } .ds-icon-btn--active, .ds-icon-btn--active:hover { background: var(--color-accent-muted, #2a2145); color: var(--color-accent, #7c5cff); box-shadow: 0 0 0 1px rgb(124 92 255 / 0.7); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Raised black well with a hairline border. The border itself is the focus indicator — the global ring is suppressed here.",
+      "html": "<input class=\"ds-input\" type=\"search\" placeholder=\"Search title or artist…\" aria-label=\"Search tracks\">",
+      "css": ".ds-input { width: 220px; background: var(--color-surface-raised, #14141c); color: var(--color-ink, #f2f2f7); font: 400 12px/1.35 ui-sans-serif, system-ui, sans-serif; padding: 6px 8px; border: 1px solid var(--color-border, #21212c); border-radius: 6px; outline: none; transition: border-color 150ms; } .ds-input::placeholder { color: var(--color-ink-subtle, #6e6e80); } .ds-input:focus { border-color: var(--color-accent, #7c5cff); }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Fully round, 1px border, transparent fill. Tone sets border and text together. Always carries a word, never a bare colour.",
+      "html": "<div style=\"display:flex;gap:6px;align-items:center;flex-wrap:wrap\"><span class=\"ds-pill ds-pill--ok\">Saved</span><span class=\"ds-pill ds-pill--warn\">Unsaved</span><span class=\"ds-pill ds-pill--accent\">#3</span><span class=\"ds-pill ds-pill--info\">AI</span></div>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border: 1px solid; border-radius: 9999px; font: 500 10px/1.4 ui-sans-serif, system-ui, sans-serif; white-space: nowrap; } .ds-pill--ok { border-color: rgb(52 211 153 / 0.4); color: var(--color-ok, #34d399); } .ds-pill--warn { border-color: rgb(251 191 36 / 0.4); color: var(--color-warn, #fbbf24); } .ds-pill--accent { border-color: rgb(124 92 255 / 0.5); color: var(--color-accent, #7c5cff); } .ds-pill--info { border-color: rgb(56 189 248 / 0.4); color: var(--color-info, #38bdf8); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Panel black with a hairline border, 10px radius, and a fixed 40px header. Flat at rest — no shadow.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel__head\"><h2 class=\"ds-panel__title\">Library</h2><span class=\"ds-panel__count\">126 tracks</span></header><div class=\"ds-panel__body\">Panel content owns its own overflow.</div></section>",
+      "css": ".ds-panel { width: 260px; background: var(--color-surface, #0e0e14); border: 1px solid var(--color-border, #21212c); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; } .ds-panel__head { height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--color-border, #21212c); } .ds-panel__title { margin: 0; color: var(--color-ink, #f2f2f7); font: 500 13px/1.2 ui-sans-serif, system-ui, sans-serif; } .ds-panel__count { color: var(--color-ink-subtle, #6e6e80); font: 400 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; } .ds-panel__body { padding: 12px; color: var(--color-ink-muted, #9d9dae); font: 400 12px/1.5 ui-sans-serif, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Track Node",
+      "kind": "custom",
+      "refersTo": "track-node",
+      "description": "The canvas object. Fixed 240x104 so edge anchors never drift. Selection is triple-encoded: accent border, tinted surface, and a ring.",
+      "html": "<div style=\"display:flex;gap:12px;flex-wrap:wrap\"><article class=\"ds-node\"><span class=\"ds-node__setbar\" aria-hidden=\"true\"></span><div class=\"ds-node__top\"><span class=\"ds-node__art\" aria-hidden=\"true\"></span><span class=\"ds-node__names\"><span class=\"ds-node__title\">Innerbloom</span><span class=\"ds-node__artist\">RÜFÜS DU SOL</span></span><span class=\"ds-node__meta\"><span class=\"ds-node__bpm\">122</span><span class=\"ds-node__key\">8A</span></span></div><div class=\"ds-node__foot\"><span class=\"ds-pill ds-pill--accent\">#1</span></div></article><article class=\"ds-node ds-node--selected\"><span class=\"ds-node__setbar\" aria-hidden=\"true\"></span><div class=\"ds-node__top\"><span class=\"ds-node__art\" aria-hidden=\"true\"></span><span class=\"ds-node__names\"><span class=\"ds-node__title\">Losing It</span><span class=\"ds-node__artist\">FISHER</span></span><span class=\"ds-node__meta\"><span class=\"ds-node__bpm\">126</span><span class=\"ds-node__key\">10A</span></span></div><div class=\"ds-node__foot\"><span class=\"ds-pill ds-pill--accent\">#2</span></div></article></div>",
+      "css": ".ds-node { position: relative; box-sizing: border-box; width: 240px; height: 104px; padding: 8px 10px; background: var(--color-surface-card, #191922); border: 1px solid var(--color-border, #21212c); border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; transition: background 150ms, border-color 150ms; } .ds-node:hover { background: var(--color-surface-hover, #20202b); border-color: var(--color-border-strong, #2e2e3c); } .ds-node--selected, .ds-node--selected:hover { background: var(--color-surface-selected, #1e1830); border-color: var(--color-accent, #7c5cff); box-shadow: 0 0 0 1px rgb(124 92 255 / 0.6), 0 10px 15px -3px rgb(0 0 0 / 0.4); } .ds-node__setbar { position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 9999px 9999px 0; background: rgb(124 92 255 / 0.8); } .ds-node__top { display: flex; align-items: flex-start; gap: 8px; } .ds-node__art { width: 40px; height: 40px; flex-shrink: 0; border-radius: 6px; background: linear-gradient(135deg, oklch(0.52 0.15 280), oklch(0.72 0.16 320)); } .ds-node__names { min-width: 0; flex: 1; display: flex; flex-direction: column; } .ds-node__title { color: var(--color-ink, #f2f2f7); font: 500 13px/1.2 ui-sans-serif, system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-node__artist { color: var(--color-ink-muted, #9d9dae); font: 400 11px/1.2 ui-sans-serif, system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-node__meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font: 400 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; } .ds-node__bpm { color: var(--color-bpm, #6ea8fe); } .ds-node__key { color: var(--color-key, #f472b6); } .ds-node__foot { display: flex; align-items: center; gap: 6px; height: 14px; }"
+    },
+    {
+      "name": "Energy Dots",
+      "kind": "custom",
+      "refersTo": "energy-dots",
+      "description": "The clearest expression of the no-colour-alone law: the dot count is the signal and the hue on the ramp reinforces it. Announced as \"Energy 4 of 5\".",
+      "html": "<div style=\"display:flex;flex-direction:column;gap:8px\"><span class=\"ds-energy\" role=\"img\" aria-label=\"Energy 2 of 5\"><i class=\"ds-energy__dot ds-energy__dot--2\"></i><i class=\"ds-energy__dot ds-energy__dot--2\"></i><i class=\"ds-energy__dot\"></i><i class=\"ds-energy__dot\"></i><i class=\"ds-energy__dot\"></i></span><span class=\"ds-energy\" role=\"img\" aria-label=\"Energy 5 of 5\"><i class=\"ds-energy__dot ds-energy__dot--5\"></i><i class=\"ds-energy__dot ds-energy__dot--5\"></i><i class=\"ds-energy__dot ds-energy__dot--5\"></i><i class=\"ds-energy__dot ds-energy__dot--5\"></i><i class=\"ds-energy__dot ds-energy__dot--5\"></i></span></div>",
+      "css": ".ds-energy { display: inline-flex; align-items: center; gap: 3px; } .ds-energy__dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--color-border-strong, #2e2e3c); } .ds-energy__dot--2 { background: var(--color-energy-2, #4ade80); } .ds-energy__dot--5 { background: var(--color-energy-5, #fb7185); }"
+    },
+    {
+      "name": "View Switcher",
+      "kind": "nav",
+      "refersTo": "view-switcher",
+      "description": "Segmented control in a raised well. Every option shows its label, so the active one is marked by fill plus ring plus weight — never by the label alone.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\" aria-label=\"Workspace view\"><button class=\"ds-seg__btn ds-seg__btn--on\" role=\"radio\" aria-checked=\"true\">Graph</button><button class=\"ds-seg__btn\" role=\"radio\" aria-checked=\"false\">Timeline</button><button class=\"ds-seg__btn\" role=\"radio\" aria-checked=\"false\">List</button></div>",
+      "css": ".ds-seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--color-surface-raised, #14141c); border: 1px solid var(--color-border, #21212c); border-radius: 8px; } .ds-seg__btn { background: transparent; border: none; cursor: pointer; padding: 4px 10px; border-radius: 6px; color: var(--color-ink-muted, #9d9dae); font: 400 12px/1.35 ui-sans-serif, system-ui, sans-serif; transition: color 150ms, background 150ms; } .ds-seg__btn:hover { color: var(--color-ink, #f2f2f7); } .ds-seg__btn:focus-visible { outline: 2px solid var(--color-accent, #7c5cff); outline-offset: 2px; } .ds-seg__btn--on, .ds-seg__btn--on:hover { background: var(--color-accent-muted, #2a2145); color: var(--color-accent, #7c5cff); font-weight: 600; box-shadow: 0 0 0 1px rgb(124 92 255 / 0.7); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Chart",
+    "overview": "FlowGraph is a navigational chart read in low light. The graph is terrain, transitions are routes, and a set is the course plotted through them. Charts do not decorate — they encode. Every hue in this system is a legend entry with exactly one meaning, and every mark that carries information carries it at least twice, so that meaning survives a dark room, a greyscale print, and a glance stolen mid-mix.\n\nThis is an instrument, not an app. The chrome recedes and the data dominates. Nothing animates for its own sake, nothing eases in on load, and no surface asks for attention it has not earned. The interface builds trust by being predictable rather than charming: the same track reads identically in the library, on the canvas, in the timeline, and in the inspector, because a DJ recognises material by its shape and must never have to re-learn it per panel.\n\nDensity is the point, not a compromise. Body text runs at 12px, labels at 11px, section headers at 10px uppercase, and numerics are monospaced and tab-aligned because they are read down a column and compared. What holds this together is strict rhythm — a three-step radius scale, a five-step tonal surface ramp, hairline borders — rather than generous whitespace. The system earns its density by never letting two things mean the same thing in two different ways.",
+    "keyCharacteristics": [
+      "Five stepped near-black surfaces carry all depth; shadow appears only when something physically lifts off the plane.",
+      "Violet is selection and nothing else. It never signals importance, quality, or category.",
+      "Functional hues form a legend: BPM, key, energy, and each transition family own one hue apiece.",
+      "Every meaning is double-encoded — count, shape, dash pattern, or label alongside the hue.",
+      "Outlined over filled: a 1px border on near-black is the default surface treatment.",
+      "Controls are quiet at rest and firm up on hover; the interface is calm until reached for."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Violet means selection. It does not mean important, primary, recommended, new, or on-brand. If a surface needs emphasis and is not selected, it gets a border weight or an ink step — not the accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Legend Rule",
+        "body": "Every functional hue is an entry in a legend with exactly one referent. BPM is blue; key is rose; energy is the five-step ramp; each transition family owns its hue. Reusing a legend hue for decoration corrupts the legend for every screen at once.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ring-Over-Fill Rule",
+        "body": "accent-muted is ~1.3:1 against the panel — too weak to carry state. Any active or selected control that fills with it must also carry a ring-accent/70 outline, because an outline is either present or absent and survives greyscale where the fill does not.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Any number a user compares against another number is monospaced and tabular-nums. BPM, key, duration, and set position are all read down a column; proportional digits make that column lie.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ceiling Rule",
+        "body": "No working surface uses type above 13px. The 18–20px headline exists only for the wordmark and the sign-in screen — the two places that are not the instrument.",
+        "section": "typography"
+      },
+      {
+        "name": "The Viewport Rule",
+        "body": "The document never scrolls. If content overflows, the owning panel scrolls — never the page, never the body.",
+        "section": "layout"
+      },
+      {
+        "name": "The Fixed-Node Rule",
+        "body": "Graph nodes have fixed dimensions. A node whose height depends on how many badges it happens to carry makes edge anchors drift as data changes.",
+        "section": "layout"
+      },
+      {
+        "name": "The Grounded Rule",
+        "body": "Anything at rest casts nothing. A shadow on a static panel is a claim that it is floating, and it isn't.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ten-Pixel Ceiling",
+        "body": "Nothing rounds past 10px. Oversized panel rounding is what makes an instrument look like a consumer app.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Token Rule",
+        "body": "No literal font size. Every size is a --text-* role. A literal is invisible to the density mode and drifts from the role it was meant to match.",
+        "section": "typography"
+      },
+      {
+        "name": "The Text-Fill Rule",
+        "body": "accent is a fill, a border and a ring; accent-text is the accent as text; accent-strong is the accent under white text. One hex cannot clear 4.5:1 in all three jobs.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do reserve Signal Violet (#7c5cff) for selection and set membership. Everything else earns emphasis through border weight or an ink step.",
+      "Do pair every functional hue with a second cue — a count, a shape, a dash pattern, or a written label.",
+      "Do add a ring-accent/70 outline whenever accent-muted fills an active control. The fill is ~1.3:1 and cannot carry state alone.",
+      "Do keep radii on the three-step scale: 6px controls, 8px cards, 10px panels.",
+      "Do monospace and tabular-nums every number a user compares against another number.",
+      "Do render absence honestly — an em dash, an unfilled control, or no mark at all. Never a zero standing in for unknown.",
+      "Do let panels own their overflow. The document never scrolls.",
+      "Do keep alternative routes visible at reduced weight rather than hiding them."
+    ],
+    "donts": [
+      "Don't nest shells. A panel inside a panel inside a rounded rectangle is what made the previous build read as boxed; use the flush variant where surfaces meet the grid.",
+      "Don't round past 10px. No 16px cards, no pill-shaped containers.",
+      "Don't encode any meaning by colour alone — not transition type, not energy, not save state, not file availability.",
+      "Don't add decorative motion. Transitions are ~120ms and touch colour, opacity, and transform only. Nothing eases in on load, and nothing animates to attract attention.",
+      "Don't put a shadow on anything at rest. Shadow is reserved for elements genuinely lifted off the plane.",
+      "Don't introduce type above 13px inside a working surface.",
+      "Don't reuse a legend hue (BPM blue, key rose, an energy step, a technique family) for decoration — it corrupts the legend everywhere at once.",
+      "Don't invent a saturated fill for a selected row. Selection is a violet tint; a selected row must still read as a row."
+    ]
+  }
+}

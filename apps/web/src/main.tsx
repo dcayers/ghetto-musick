@@ -10,7 +10,13 @@ import {
 import "@xyflow/react/dist/style.css";
 import "./styles/theme.css";
 
-import { listTracks, listAllTracks, isUnauthenticated } from "./lib/api.js";
+import {
+  listTracks,
+  listAllTracks,
+  isUnauthenticated,
+  isUnreachable,
+  ApiError,
+} from "./lib/api.js";
 import { createGraph, getGraph, listGraphs } from "./lib/graph-api.js";
 import { createSet, getSet, listSets } from "./lib/set-api.js";
 import { adaptGraph, adaptSet, adaptTrack } from "./lib/adapt.js";
@@ -45,12 +51,18 @@ const queryClient = new QueryClient({
  */
 function App() {
   const [sessionKey, setSessionKey] = useState(0);
+  // Held here rather than only in `Workspace`, because the screen that most
+  // needs it is the one shown when the API cannot be reached at all — and that
+  // screen renders before `Workspace` ever mounts.
+  const [useDemo, setUseDemo] = useState(false);
 
   const { error, isPending } = useQuery({
     queryKey: ["session-probe", sessionKey],
     queryFn: () => listTracks({ limit: 1 }),
     retry: false,
   });
+
+  if (useDemo) return <WorkspaceShell />;
 
   if (isPending) {
     return (
@@ -60,24 +72,72 @@ function App() {
     );
   }
 
-  if (isUnauthenticated(error)) {
+  const signIn = (
+    <SignIn
+      onSignedIn={() => {
+        queryClient.clear();
+        setSessionKey((key) => key + 1);
+      }}
+    />
+  );
+
+  if (isUnauthenticated(error)) return signIn;
+
+  /*
+   * The API is not answering.
+   *
+   * Without this branch the probe falls through on any non-401 and the next
+   * screen blames the graphs — "Could not load your graphs" — for a server
+   * that is not running. The status code was being discarded, so the one fact
+   * that explains the failure never reached the person reading it.
+   */
+  if (isUnreachable(error)) {
     return (
-      <SignIn
-        onSignedIn={() => {
-          queryClient.clear();
-          setSessionKey((key) => key + 1);
-        }}
-      />
+      <div className="grid h-screen place-items-center">
+        <EmptyState
+          title="Can't reach the FlowGraph API."
+          hint={
+            error instanceof ApiError
+              ? `The server answered ${error.status}. Check that it is running, then try again.`
+              : "No response from the server. Check that it is running, then try again."
+          }
+          actions={
+            <>
+              <button
+                type="button"
+                className={ACTION_CLASS}
+                onClick={() => void queryClient.invalidateQueries({ queryKey: ["session-probe"] })}
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                className={QUIET_ACTION_CLASS}
+                onClick={() => setUseDemo(true)}
+              >
+                Open the demo
+              </button>
+            </>
+          }
+        />
+      </div>
     );
   }
 
-  return <Workspace />;
+  return (
+    <Workspace
+      onSessionExpired={() => {
+        queryClient.clear();
+        setSessionKey((key) => key + 1);
+      }}
+    />
+  );
 }
 
 const ACTION_CLASS =
-  "bg-accent hover:bg-accent-hover rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60";
+  "bg-accent-strong hover:bg-accent rounded-md px-3 py-1.5 text-body font-medium text-white disabled:opacity-60";
 const QUIET_ACTION_CLASS =
-  "border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-md border px-3 py-1.5 text-xs font-medium";
+  "border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-md border px-3 py-1.5 text-body font-medium";
 
 /**
  * Chooses the workspace's data source.
@@ -88,7 +148,7 @@ const QUIET_ACTION_CLASS =
  * user's own data — taking it is a decision made here, on a screen that says
  * what it is.
  */
-function Workspace() {
+function Workspace({ onSessionExpired }: { onSessionExpired: () => void }) {
   const [useDemo, setUseDemo] = useState(false);
   const queryClient = useQueryClient();
 
@@ -123,15 +183,55 @@ function Workspace() {
   }
 
   if (graphs.isError) {
+    /*
+     * The session gate runs once, on mount. A session that expires after it
+     * passed surfaces here instead, and "Try again" can never recover from it —
+     * every retry is another 401. Offering the sign-in form is the only exit.
+     */
+    if (isUnauthenticated(graphs.error)) {
+      return (
+        <div className="grid h-screen place-items-center">
+          <EmptyState
+            title="Your session expired."
+            hint="Sign in again to get back to your workspace. Nothing was lost."
+            actions={
+              <button type="button" className={ACTION_CLASS} onClick={onSessionExpired}>
+                Sign in again
+              </button>
+            }
+          />
+        </div>
+      );
+    }
+
+    const unreachable = isUnreachable(graphs.error);
     return (
       <div className="grid h-screen place-items-center">
         <EmptyState
-          title="Could not load your graphs."
-          hint={graphs.error instanceof Error ? graphs.error.message : undefined}
+          // Naming the server rather than the data: with the API down, "could
+          // not load your graphs" sends the DJ looking for a problem with their
+          // graphs, which is the one place the problem is not.
+          title={unreachable ? "Can't reach the FlowGraph API." : "Could not load your graphs."}
+          hint={
+            unreachable
+              ? graphs.error instanceof ApiError
+                ? `The server answered ${graphs.error.status}. Check that it is running, then try again.`
+                : "No response from the server. Check that it is running, then try again."
+              : graphs.error instanceof Error
+                ? graphs.error.message
+                : undefined
+          }
           actions={
-            <button type="button" className={ACTION_CLASS} onClick={() => void graphs.refetch()}>
-              Try again
-            </button>
+            <>
+              <button type="button" className={ACTION_CLASS} onClick={() => void graphs.refetch()}>
+                Try again
+              </button>
+              {/* The demo needs no API, so it stays reachable exactly when
+                  everything else is not. */}
+              <button type="button" className={QUIET_ACTION_CLASS} onClick={() => setUseDemo(true)}>
+                Open the demo
+              </button>
+            </>
           }
         />
       </div>

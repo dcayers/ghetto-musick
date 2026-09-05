@@ -27,11 +27,19 @@ export type TrackGraph = DirectedGraph<ScorableTrack, TransitionAttributes>;
 
 export function createTrackGraph(): TrackGraph {
   // Directed: plan §7.2 — an A→B transition is not automatically valid as B→A.
-  // `multi: false` enforces one transition per ordered pair, matching the
-  // unique constraint on the Transition model.
+  //
+  // `multi: true` because the unique constraint on the Transition model is
+  // `(workspaceId, fromTrackId, toTrackId, technique)` — technique is part of
+  // the key, so the database has always allowed several transitions between
+  // the same ordered pair, one per technique. A long blend and an echo out
+  // from A into B are two different routes, which is the whole premise of
+  // planning on a graph rather than in a list. A single-edge model silently
+  // dropped all but the last one on the canvas.
+  //
+  // Self-loops stay banned: a track does not mix into itself.
   return new DirectedGraph<ScorableTrack, TransitionAttributes>({
     type: "directed",
-    multi: false,
+    multi: true,
     allowSelfLoops: false,
   });
 }
@@ -71,7 +79,11 @@ export function buildTrackGraph(
       continue;
     }
 
-    graph.mergeDirectedEdge(transition.sourceTrackId, transition.targetTrackId, {
+    // Keyed on the transition id, not on the pair. On a multi graph an
+    // unkeyed merge would add a second parallel edge every time the same
+    // transition was rebuilt; keying it means re-merging the same transition
+    // updates in place while a genuinely different one gets its own edge.
+    graph.mergeDirectedEdgeWithKey(transition.id, transition.sourceTrackId, transition.targetTrackId, {
       id: transition.id,
       ...(transition.technique !== undefined ? { technique: transition.technique } : {}),
       ...(transition.tags !== undefined ? { tags: transition.tags } : {}),

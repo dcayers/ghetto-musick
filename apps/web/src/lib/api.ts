@@ -31,6 +31,22 @@ export function isUnauthenticated(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
 
+/**
+ * The API could not be reached, or failed before it could answer.
+ *
+ * Distinguished from an ordinary request failure because the recovery is
+ * completely different: nothing the user does inside the app will help, and
+ * telling them their graphs failed to load when the server is not running
+ * sends them looking for a problem with their data.
+ *
+ * A rejected `fetch` — no proxy, connection refused, CORS — never reaches our
+ * wrappers, so it arrives as a `TypeError` rather than an `ApiError`.
+ */
+export function isUnreachable(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status >= 500 || error.status === 0;
+  return error instanceof TypeError;
+}
+
 export async function listTracks(params?: {
   query?: string;
   limit?: number;

@@ -70,7 +70,7 @@ export const TrackNode = memo(function TrackNode({
         role="img"
         aria-label="Track unavailable"
         style={{ width: NODE_WIDTH }}
-        className="border-border-strong bg-surface-card text-ink-subtle rounded-card flex h-8 items-center border border-dashed px-2 text-[11px]"
+        className="border-border-strong bg-surface-card text-ink-subtle rounded-card flex h-8 items-center border border-dashed px-2 text-node-label"
       >
         <Handle type="target" position={Position.Left} />
         <Truncate className="flex-1">{`Track unavailable — ${data.trackId}`}</Truncate>
@@ -110,7 +110,7 @@ export const TrackNode = memo(function TrackNode({
         )}
       >
         <Handle type="target" position={Position.Left} />
-        <Truncate className="text-ink flex-1 text-[11px]">{track.title}</Truncate>
+        <Truncate className="text-ink flex-1 text-node-label">{track.title}</Truncate>
         <Bpm value={track.bpm} />
         <Handle type="source" position={Position.Right} />
       </div>
@@ -162,10 +162,10 @@ export const TrackNode = memo(function TrackNode({
       <div className="flex items-start gap-2">
         <Artwork seed={track.id} size={40} />
         <div className="min-w-0 flex-1">
-          <Truncate className="text-ink text-[13px] leading-tight font-medium">
+          <Truncate className="text-ink text-node-title leading-tight font-medium">
             {track.title}
           </Truncate>
-          <Truncate className="text-ink-muted text-[11px] leading-tight">{track.artist}</Truncate>
+          <Truncate className="text-ink-muted text-node-label leading-tight">{track.artist}</Truncate>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-0.5">
           <Bpm value={track.bpm} />

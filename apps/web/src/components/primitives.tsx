@@ -51,11 +51,11 @@ export function Bpm({
   className?: string;
 }) {
   if (value === null) {
-    return <span className="text-ink-subtle text-xs tabular-nums">—</span>;
+    return <span className="text-ink-subtle font-mono text-num tabular-nums">—</span>;
   }
   return (
     <span
-      className={cx("text-bpm font-mono text-xs tabular-nums", className)}
+      className={cx("text-bpm font-mono text-body tabular-nums", className)}
       title={`${value.toFixed(1)} BPM`}
     >
       {value.toFixed(decimals)}
@@ -64,10 +64,10 @@ export function Bpm({
 }
 
 export function CamelotKey({ value, className }: { value: string | null; className?: string }) {
-  if (!value) return <span className="text-ink-subtle text-xs tabular-nums">—</span>;
+  if (!value) return <span className="text-ink-subtle font-mono text-num tabular-nums">—</span>;
   return (
     <span
-      className={cx("text-key font-mono text-xs tabular-nums", className)}
+      className={cx("text-key font-mono text-body tabular-nums", className)}
       title={`Camelot ${value}`}
     >
       {value}
@@ -335,7 +335,7 @@ export function Panel({
     >
       {(title || actions) && (
         <header className="border-border flex h-10 shrink-0 items-center justify-between gap-2 border-b px-3">
-          <h2 id={headerId} className="text-ink min-w-0 text-[13px] font-medium">
+          <h2 id={headerId} className="text-ink min-w-0 text-title font-medium">
             {title}
           </h2>
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
@@ -362,8 +362,8 @@ export function EmptyState({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
       {icon && <div className="text-ink-subtle mb-1">{icon}</div>}
-      <p className="text-ink-muted text-sm">{title}</p>
-      {hint && <p className="text-ink-subtle max-w-[34ch] text-xs leading-relaxed">{hint}</p>}
+      <p className="text-ink-muted text-title">{title}</p>
+      {hint && <p className="text-ink-subtle max-w-[52ch] text-body leading-relaxed">{hint}</p>}
       {actions && <div className="mt-2 flex flex-wrap justify-center gap-2">{actions}</div>}
     </div>
   );

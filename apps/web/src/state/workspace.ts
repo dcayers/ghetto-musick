@@ -14,6 +14,7 @@ import {
   adaptGraph,
   adaptNode,
   adaptSetItem,
+  adaptTransition,
   mergeTracks,
   type AdaptedGraph,
   type AdaptedSet,
@@ -26,10 +27,13 @@ import {
 import {
   GraphConflictError,
   addNode as addNodeRequest,
+  createTransition as createTransitionRequest,
   deleteTransition as deleteTransitionRequest,
   getGraph,
+  removeNode as removeNodeRequest,
   saveLayout,
   type NodePosition,
+  type TransitionTechnique,
 } from "../lib/graph-api.js";
 
 /**
@@ -65,6 +69,25 @@ export const PANEL_LIMITS: Readonly<Record<PanelKey, { min: number; max: number;
 export type OverlayMetric = "energy" | "bpm" | "key";
 export type ViewMode = "graph" | "timeline" | "list";
 export type SaveState = "saved" | "saving" | "unsaved";
+
+/**
+ * Severity of a status message.
+ *
+ * `failure` is not a colour. It decides whether the message may fade on its
+ * own and whether it carries the word "Failed" — §17 forbids signalling this
+ * by hue alone, and "did that save?" is exactly the question a fading green
+ * toast leaves behind.
+ */
+export type StatusTone = "info" | "failure";
+
+export interface WorkspaceStatus {
+  readonly message: string;
+  readonly tone: StatusTone;
+  /** A single-step recovery offered with the message, when one is possible. */
+  readonly undo?: (() => void) | undefined;
+  /** Label for the recovery control. Present whenever `undo` is. */
+  readonly undoLabel?: string | undefined;
+}
 
 export interface LibraryFilters {
   readonly query: string;
@@ -153,7 +176,9 @@ interface WorkspaceState {
   panels: Readonly<Record<PanelKey, PanelState>>;
   /** Sections the inspector has open, by section id — §9 preserves this. */
   openSections: Readonly<Record<string, boolean>>;
-  status: string | null;
+  /** True while the booth view is showing. Session-local; never persisted. */
+  boothOpen: boolean;
+  status: WorkspaceStatus | null;
   /**
    * Bumped on every announce, including a repeat of the same message.
    *
@@ -185,9 +210,43 @@ interface WorkspaceState {
   addTrackToSet: (trackId: string, position?: number) => void;
   removeSetItem: (itemId: string) => void;
   addTrackToGraph: (trackId: string, x: number, y: number) => void;
+  /**
+   * Draws a transition between two tracks.
+   *
+   * Returns why it refused, or null when it went ahead — the canvas needs to
+   * say something specific when a drag lands somewhere it cannot go, and a
+   * silent no-op reads as a broken gesture.
+   */
+  createTransition: (
+    sourceTrackId: string,
+    targetTrackId: string,
+    technique: TransitionTechnique,
+  ) => string | null;
   removeTransition: (transitionId: string) => void;
   updateTransition: (transitionId: string, patch: Partial<WorkspaceTransition>) => void;
-  announce: (message: string | null) => void;
+  /**
+   * Removes a node from the canvas. Its transitions go with it.
+   *
+   * `title` is only for the message; the store does not otherwise know or care
+   * what the track is called.
+   */
+  removeNode: (nodeId: string, title?: string | null) => void;
+  /**
+   * Reports something that happened.
+   *
+   * Passing `undo` makes the message persistent rather than self-clearing —
+   * an offer the reader has to be given time to take.
+   */
+  announce: (message: string | null, undo?: () => void) => void;
+  /**
+   * Reports a failure, with an optional single-step recovery.
+   *
+   * Split from `announce` because the visible surface has to distinguish the
+   * two: an informational message may fade on its own, while a failure has to
+   * stay until it is read and carry a word rather than only a colour.
+   */
+  announceFailure: (message: string, undo?: () => void) => void;
+  setBoothOpen: (open: boolean) => void;
 }
 
 /* ------------------------------------------------------------ persistence -- */
@@ -309,6 +368,27 @@ let layoutInFlight = false;
 const TEMP_NODE_PREFIX = "pending-";
 const isTempId = (id: string) => id.startsWith(TEMP_NODE_PREFIX);
 
+/**
+ * Optimistic ids for transitions in flight.
+ *
+ * A plain counter rather than a timestamp or a random value: the id only has
+ * to be unique within this session, and a deterministic one keeps a store
+ * snapshot comparable across reloads while debugging.
+ */
+const TEMP_TRANSITION_PREFIX = "pending-tx-";
+let tempTransitionSeq = 0;
+
+/**
+ * Temporary ids the user removed before their create came back.
+ *
+ * A node or transition removed while its POST is still open cannot be deleted
+ * — there is no server id yet — and returning early left the row behind as an
+ * orphan the client no longer references. The create's own success handler
+ * checks this set and deletes what it just made, which is the only place that
+ * knows the real id.
+ */
+const cancelledTempIds = new Set<string>();
+
 function scheduleLayoutFlush(): void {
   if (layoutTimer !== null) clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
@@ -358,7 +438,7 @@ async function flushLayout(): Promise<void> {
       useWorkspace.setState({ saveState: "unsaved" });
       useWorkspace
         .getState()
-        .announce(error instanceof Error ? error.message : "Could not save the layout.");
+        .announceFailure(error instanceof Error ? error.message : "Could not save the layout.");
     }
   } finally {
     layoutInFlight = false;
@@ -383,7 +463,7 @@ async function reloadGraph(graphId: string, message: string): Promise<void> {
     useWorkspace.setState({ saveState: "unsaved" });
     useWorkspace
       .getState()
-      .announce(error instanceof Error ? error.message : "Could not reload the graph.");
+      .announceFailure(error instanceof Error ? error.message : "Could not reload the graph.");
   }
 }
 
@@ -423,6 +503,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   filters: EMPTY_FILTERS,
   panels: initial.panels,
   openSections: initial.openSections,
+  boothOpen: false,
   status: null,
   statusId: 0,
 
@@ -565,7 +646,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         // Put the order back. A timeline showing an order the database does
         // not have is worse than a visible failure.
         set((state) => ({ set: { ...state.set, items }, saveState: "saved" }));
-        get().announce(
+        get().announceFailure(
           error instanceof Error ? error.message : "Could not reorder the set.",
         );
       }
@@ -618,7 +699,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           },
           saveState: "saved",
         }));
-        get().announce(
+        get().announceFailure(
           error instanceof Error ? error.message : "Could not add that track to the set.",
         );
       }
@@ -654,7 +735,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           items.splice(Math.min(index, items.length), 0, removed);
           return { set: { ...state.set, items }, saveState: "saved" };
         });
-        get().announce(
+        get().announceFailure(
           error instanceof Error ? error.message : "Could not remove that track.",
         );
       }
@@ -691,6 +772,17 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     void (async () => {
       try {
         const created = adaptNode(await addNodeRequest(graphId, { trackId, x, y }));
+
+        // Removed while this was open. The row exists now and nothing on the
+        // client references it, so delete what we just made.
+        if (cancelledTempIds.delete(tempId)) {
+          void removeNodeRequest(graphId, created.id).catch(() => {
+            get().announceFailure("A removed track may still be on the server. Reload to check.");
+          });
+          set({ saveState: "saved" });
+          return;
+        }
+
         set((state) => ({
           // Swapped in place: the node may have been dragged while the request
           // was open, so the server's id is taken but the local position kept,
@@ -711,8 +803,227 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           nodes: state.nodes.filter((node) => node.id !== tempId),
           saveState: "saved",
         }));
-        get().announce(
+        get().announceFailure(
           error instanceof Error ? error.message : "Could not place that track.",
+        );
+      }
+    })();
+  },
+
+  createTransition: (sourceTrackId, targetTrackId, technique) => {
+    const before = get();
+
+    // A track does not mix into itself. The API rejects this too, but a round
+    // trip to be told so would leave the drag looking like it worked.
+    if (sourceTrackId === targetTrackId) return "A track cannot mix into itself.";
+
+    // The unique constraint includes technique, and the repository upserts
+    // against it — so an exact repeat would silently rewrite the existing row
+    // and return no error. Refusing here is what makes that visible, and
+    // selecting the existing edge is the useful thing to do with the gesture.
+    const existing = before.transitions.find(
+      (tx) =>
+        tx.sourceTrackId === sourceTrackId &&
+        tx.targetTrackId === targetTrackId &&
+        tx.technique === technique,
+    );
+    if (existing) {
+      set({ selectedTransitionId: existing.id, selectedTrackId: null, multiSelectedTrackIds: [] });
+      return "Those tracks are already connected with that technique.";
+    }
+
+    tempTransitionSeq += 1;
+    const tempId = `${TEMP_TRANSITION_PREFIX}${tempTransitionSeq}`;
+    const draft: WorkspaceTransition = {
+      id: tempId,
+      sourceTrackId,
+      targetTrackId,
+      technique,
+      tags: [],
+      notes: "",
+      // The server scores on create and returns it; until then there is no
+      // confidence, and a placeholder number would be a fabrication.
+      confidence: null,
+      bars: null,
+      mixOutCueId: null,
+      mixInCueId: null,
+      fx: [],
+      warnings: [],
+      origin: "manual",
+      provenance: "manual",
+    };
+
+    set((state) => ({
+      transitions: [...state.transitions, draft],
+      selectedTransitionId: tempId,
+      selectedTrackId: null,
+      multiSelectedTrackIds: [],
+      saveState: before.source === "live" ? "saving" : "unsaved",
+    }));
+
+    if (before.source !== "live") return null;
+
+    void (async () => {
+      try {
+        const created = adaptTransition(
+          await createTransitionRequest({
+            fromTrackId: sourceTrackId,
+            toTrackId: targetTrackId,
+            technique,
+          }),
+        );
+
+        // Deleted while this was open — the row exists now, so remove it.
+        if (cancelledTempIds.delete(tempId)) {
+          void deleteTransitionRequest(created.id).catch(() => {
+            get().announceFailure(
+              "A removed transition may still be on the server. Reload to check.",
+            );
+          });
+          set({ saveState: "saved" });
+          return;
+        }
+
+        set((state) => ({
+          transitions: state.transitions.map((tx) => (tx.id === tempId ? created : tx)),
+          // Follow the id, so an inspector opened on the draft stays open on
+          // the real row rather than emptying out when the swap lands.
+          selectedTransitionId:
+            state.selectedTransitionId === tempId ? created.id : state.selectedTransitionId,
+          saveState: "saved",
+        }));
+      } catch (error) {
+        set((state) => ({
+          transitions: state.transitions.filter((tx) => tx.id !== tempId),
+          selectedTransitionId:
+            state.selectedTransitionId === tempId ? null : state.selectedTransitionId,
+          saveState: "saved",
+        }));
+        get().announceFailure(
+          error instanceof Error ? error.message : "Could not create that transition.",
+        );
+      }
+    })();
+
+    return null;
+  },
+
+  removeNode: (nodeId, title) => {
+    const before = get();
+    const removed = before.nodes.find((node) => node.id === nodeId);
+    if (!removed) return;
+    const name = title ?? "that track";
+
+    /*
+     * Transitions are deliberately untouched.
+     *
+     * `removeNode` on the API deletes the graph node and nothing else —
+     * transitions are workspace-level and outlive any single graph. Dropping
+     * them from the store as well would desync the client from the server and
+     * lose them on the next reload. They stop being drawn on their own, because
+     * `buildTrackGraph` skips any transition whose endpoints are not placed.
+     *
+     * That is also what makes the undo below honest: putting the node back is
+     * the whole recovery, and its routes reappear with it.
+     */
+    const hidden = before.transitions.filter(
+      (tx) => tx.sourceTrackId === removed.trackId || tx.targetTrackId === removed.trackId,
+    ).length;
+
+    /*
+     * Whether the DJ took the undo before the DELETE came back.
+     *
+     * Both paths put the node back, and without this flag they can both run:
+     * undo re-places it on the server, then the DELETE fails and the catch
+     * re-adds it locally too, leaving two copies of one track on the canvas.
+     */
+    let undone = false;
+
+    const restore = () => {
+      undone = true;
+      set((state) => ({
+        nodes: [...state.nodes, removed],
+        saveState: state.source === "live" ? "saving" : "unsaved",
+      }));
+
+      const state = get();
+      if (state.source !== "live" || state.graphId === null || isTempId(nodeId)) return;
+
+      // Re-placed rather than un-deleted: the row is gone, so this is a fresh
+      // node at the same coordinates, and its id changes.
+      void (async () => {
+        try {
+          const recreated = adaptNode(
+            await addNodeRequest(state.graphId!, {
+              trackId: removed.trackId,
+              x: removed.x,
+              y: removed.y,
+            }),
+          );
+          set((current) => ({
+            nodes: current.nodes.map((node) => (node.id === nodeId ? recreated : node)),
+            saveState: "saved",
+          }));
+        } catch (error) {
+          set((current) => ({
+            nodes: current.nodes.filter((node) => node.id !== nodeId),
+            saveState: "saved",
+          }));
+          get().announceFailure(
+            error instanceof Error ? error.message : "Could not restore that track.",
+          );
+        }
+      })();
+    };
+
+    set((state) => ({
+      nodes: state.nodes.filter((node) => node.id !== nodeId),
+      selectedTrackId: state.selectedTrackId === removed.trackId ? null : state.selectedTrackId,
+      multiSelectedTrackIds: state.multiSelectedTrackIds.filter((id) => id !== removed.trackId),
+      saveState: before.source === "live" ? "saving" : "unsaved",
+    }));
+
+    // Announced with its recovery rather than guarded by a confirm. A confirm
+    // on every delete is friction on the common case; an undo is the same
+    // safety without it. The count is what tells the DJ that routes went with
+    // it — and that they were kept, not destroyed.
+    get().announce(
+      hidden === 0
+        ? `Removed ${name} from the canvas. Undo is available.`
+        : `Removed ${name}. Its ${hidden} transition${hidden === 1 ? "" : "s"} stay in the workspace. Undo is available.`,
+      restore,
+    );
+
+    const graphId = before.graphId;
+
+    if (before.source !== "live" || graphId === null) return;
+
+    // A node still under a temporary id has no server row to delete yet. Mark
+    // it so the in-flight create tidies up after itself — dropping it locally
+    // and returning left the row on the server with nothing pointing at it.
+    if (isTempId(nodeId)) {
+      cancelledTempIds.add(nodeId);
+      set({ saveState: "saved" });
+      return;
+    }
+
+    void (async () => {
+      try {
+        await removeNodeRequest(graphId, nodeId);
+        set({ saveState: "saved" });
+      } catch (error) {
+        set({ saveState: "saved" });
+        // Already undone: the node is back on screen and `restore` has posted
+        // a fresh row for it. Adding it again here is the duplicate this flag
+        // exists to prevent, and the failure is no longer a failure — the DJ
+        // asked for the node to stay and it stayed.
+        if (undone) return;
+        // Put it back locally only. `restore` re-places the node on the server,
+        // which is right after a *successful* delete and wrong here — the row
+        // was never removed, so re-posting would leave two.
+        set((state) => ({ nodes: [...state.nodes, removed] }));
+        get().announceFailure(
+          error instanceof Error ? error.message : "Could not remove that track.",
         );
       }
     })();
@@ -731,6 +1042,14 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
 
     if (before.source !== "live") return;
 
+    // Deleted while its own create was still open: same orphan problem as a
+    // pending node, same fix — the create resolves it.
+    if (transitionId.startsWith(TEMP_TRANSITION_PREFIX)) {
+      cancelledTempIds.add(transitionId);
+      set({ saveState: "saved" });
+      return;
+    }
+
     void (async () => {
       try {
         await deleteTransitionRequest(transitionId);
@@ -742,7 +1061,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           transitions: [...state.transitions, removed],
           saveState: "saved",
         }));
-        get().announce(
+        get().announceFailure(
           error instanceof Error ? error.message : "Could not delete that transition.",
         );
       }
@@ -764,7 +1083,26 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     );
   },
 
-  announce: (status) => set((state) => ({ status, statusId: state.statusId + 1 })),
+  setBoothOpen: (boothOpen) => set({ boothOpen }),
+
+  announce: (message, undo) =>
+    set((state) => ({
+      status:
+        message === null
+          ? null
+          : { message, tone: "info" as const, ...(undo ? { undo, undoLabel: "Undo" } : {}) },
+      statusId: state.statusId + 1,
+    })),
+
+  announceFailure: (message, undo) =>
+    set((state) => ({
+      status: {
+        message,
+        tone: "failure" as const,
+        ...(undo ? { undo, undoLabel: "Undo" } : {}),
+      },
+      statusId: state.statusId + 1,
+    })),
 }));
 
 /* ------------------------------------------------------------- selectors -- */

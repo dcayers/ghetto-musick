@@ -75,7 +75,7 @@ const TYPING_SURFACES = [
   '[role="combobox"]',
 ].join(",");
 
-function isTypingTarget(target: EventTarget | null): boolean {
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.closest(TYPING_SURFACES) !== null;
 }
@@ -239,7 +239,7 @@ export function CanvasZoomControls({
         // WCAG 2.5.3: the visible text is part of the accessible name, so a
         // voice-control user can say "one hundred percent" and hit this.
         aria-label={`Zoom ${label}, reset to 100%`}
-        className="text-ink-muted hover:bg-surface-raised hover:text-ink min-w-[3.25rem] rounded-md px-1 py-1 text-center font-mono text-[11px] tabular-nums transition-colors"
+        className="text-ink-muted hover:bg-surface-raised hover:text-ink min-w-[3.25rem] rounded-md px-1 py-1 text-center font-mono text-label tabular-nums transition-colors"
       >
         {label}
       </Button>

@@ -156,7 +156,7 @@ export function Section({
           onPress={() => toggleSection(id)}
           aria-expanded={open}
           aria-controls={contentId}
-          className="text-ink-muted hover:text-ink flex min-w-0 items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase"
+          className="text-ink-muted hover:text-ink flex min-w-0 items-center gap-1.5 text-section font-medium uppercase"
         >
           <ChevronDown
             size={13}
@@ -199,8 +199,8 @@ export function Field({
 }) {
   return (
     <div className="grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2 py-[3px]">
-      <dt className="text-ink-subtle text-[11px]">{label}</dt>
-      <dd className="text-ink flex min-w-0 flex-wrap items-baseline justify-end gap-x-1.5 gap-y-1 text-right text-[11px]">
+      <dt className="text-ink-subtle text-label">{label}</dt>
+      <dd className="text-ink flex min-w-0 flex-wrap items-baseline justify-end gap-x-1.5 gap-y-1 text-right text-label">
         <span className="min-w-0 flex-1 truncate">{children}</span>
         <span className="shrink-0">{aside}</span>
       </dd>
@@ -310,8 +310,8 @@ export function MiniToggle({
         // the meaning — "S" tells a screen-reader user nothing.
         aria-label={description}
         className={cx(
-          "border-border text-ink-subtle rounded-control grid size-5 shrink-0 place-items-center border text-[10px] font-medium disabled:opacity-40",
-          isSelected && tone === "accent" && "border-accent bg-accent text-white",
+          "border-border text-ink-subtle rounded-control grid size-5 shrink-0 place-items-center border text-meta font-medium disabled:opacity-40",
+          isSelected && tone === "accent" && "border-accent bg-accent-strong text-white",
           isSelected && tone === "warn" && "border-warn bg-warn text-black",
         )}
       >
@@ -337,7 +337,7 @@ export function Hint({ label, children }: { label: string; children: ReactNode }
       {children}
       <Tooltip
         offset={6}
-        className="border-border bg-surface-overlay text-ink rounded-control z-50 border px-2 py-1 text-[11px] shadow-lg"
+        className="border-border bg-surface-overlay text-ink rounded-control z-50 border px-2 py-1 text-label shadow-lg"
       >
         {label}
       </Tooltip>
@@ -378,7 +378,7 @@ export function IconButton({
           // outline that is present or absent survives greyscale.
           "rounded-control grid size-7 shrink-0 place-items-center transition-colors disabled:opacity-40",
           isActive
-            ? "bg-accent-muted text-accent ring-accent/70 ring-1"
+            ? "bg-accent-muted text-accent-text ring-accent/70 ring-1"
             : tone === "danger"
               ? "text-ink-muted hover:bg-danger/15 hover:text-danger"
               : "text-ink-muted hover:bg-surface-hover hover:text-ink",
@@ -405,12 +405,12 @@ export function Pill({
     <span
       title={title}
       className={cx(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium whitespace-nowrap",
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-meta font-medium whitespace-nowrap",
         tone === "neutral" && "border-border text-ink-muted",
         tone === "ok" && "border-ok/40 text-ok",
         tone === "warn" && "border-warn/40 text-warn",
         tone === "danger" && "border-danger/40 text-danger",
-        tone === "accent" && "border-accent/50 text-accent",
+        tone === "accent" && "border-accent/50 text-accent-text",
         tone === "info" && "border-info/40 text-info",
         className,
       )}

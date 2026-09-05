@@ -160,7 +160,7 @@ function TransitionBody({
         {/* Sticky so the pair stays visible while the detail list scrolls — the
             whole inspector is meaningless without knowing which mix it is. */}
         <header className="bg-surface border-border sticky top-0 z-10 border-b p-3">
-          <p className="text-ink-subtle text-[10px] font-medium tracking-wide uppercase">
+          <p className="text-ink-subtle text-section font-medium uppercase">
             Transition
           </p>
           <div className="mt-1.5 flex items-center gap-2">
@@ -184,7 +184,7 @@ function TransitionBody({
                     }
                   }}
                 >
-                  <Button className="border-border bg-surface-raised text-ink hover:border-border-strong flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] outline-none">
+                  <Button className="border-border bg-surface-raised text-ink hover:border-border-strong flex items-center gap-1.5 rounded px-1.5 py-0.5 text-label outline-none">
                     <SelectValue />
                     <ChevronDown size={11} aria-hidden="true" className="shrink-0" />
                   </Button>
@@ -195,7 +195,7 @@ function TransitionBody({
                           key={entry.id}
                           id={entry.id}
                           textValue={entry.label}
-                          className="text-ink-muted data-[selected]:text-accent hover:bg-surface-raised flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[11px] outline-none"
+                          className="text-ink-muted data-[selected]:text-accent-text hover:bg-surface-raised flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-label outline-none"
                         >
                           <TechniqueMark spec={entry} />
                           {entry.label}
@@ -228,9 +228,9 @@ function TransitionBody({
                       });
                     }}
                   >
-                    <Input className="border-border bg-surface-raised text-ink focus:border-accent w-11 rounded border px-1 py-0.5 text-right font-mono text-[11px] tabular-nums outline-none" />
+                    <Input className="border-border bg-surface-raised text-ink focus:border-accent w-11 rounded border px-1 py-0.5 text-right font-mono text-label tabular-nums outline-none" />
                   </NumberField>
-                  <span className="text-ink-subtle text-[10px]">bars</span>
+                  <span className="text-ink-subtle text-meta">bars</span>
                 </span>
               }
             >
@@ -346,7 +346,7 @@ function TransitionBody({
 
         <Section id="tx-fx" title="FX / Instructions">
           {transition.fx.length === 0 ? (
-            <p className="text-ink-subtle text-[11px]">No effects</p>
+            <p className="text-ink-subtle text-label">No effects</p>
           ) : (
             <ul className="flex flex-wrap gap-1">
               {transition.fx.map((effect) => (
@@ -378,7 +378,7 @@ function TransitionBody({
               }}
               className="w-full"
             >
-              <Input className="border-border bg-surface-raised text-ink focus:border-accent w-full rounded border px-1.5 py-1 text-[11px] outline-none" />
+              <Input className="border-border bg-surface-raised text-ink focus:border-accent w-full rounded border px-1.5 py-1 text-label outline-none" />
             </TextField>
           ) : (
             <Button
@@ -387,7 +387,7 @@ function TransitionBody({
                 setIsEditingNotes(true);
               }}
               aria-label="Edit transition notes"
-              className="text-ink hover:text-accent border-border/0 hover:border-border flex w-full min-w-0 items-start justify-between gap-1 rounded border px-1.5 py-1 text-left text-[11px]"
+              className="text-ink hover:text-accent-text border-border/0 hover:border-border flex w-full min-w-0 items-start justify-between gap-1 rounded border px-1.5 py-1 text-left text-label"
             >
               <span className="min-w-0 flex-1 whitespace-pre-wrap">
                 {transition.notes || "Add a note"}
@@ -408,11 +408,11 @@ function TransitionBody({
             : {})}
         >
           {transition.warnings.length === 0 ? (
-            <p className="text-ink-subtle text-[11px]">Nothing flagged on this transition.</p>
+            <p className="text-ink-subtle text-label">Nothing flagged on this transition.</p>
           ) : (
             <ul className="flex flex-col gap-1">
               {transition.warnings.map((warning) => (
-                <li key={warning} className="text-warn flex items-start gap-1.5 text-[11px]">
+                <li key={warning} className="text-warn flex items-start gap-1.5 text-label">
                   <AlertTriangle size={12} className="mt-px shrink-0" aria-hidden="true" />
                   <span className="min-w-0">{warning}</span>
                 </li>
@@ -431,7 +431,7 @@ function TransitionBody({
           <span title="Edits apply immediately; there is no save endpoint yet.">
             <Button
               isDisabled
-              className="border-border text-ink-muted rounded-md border px-2.5 py-1 text-[11px] disabled:opacity-50"
+              className="border-border text-ink-muted rounded-md border px-2.5 py-1 text-label disabled:opacity-50"
             >
               Save
             </Button>
@@ -443,7 +443,7 @@ function TransitionBody({
             <>
               <Button
                 onPress={() => setIsConfirmingRemove(false)}
-                className="border-border text-ink-muted hover:bg-surface-raised hover:text-ink rounded-md border px-2.5 py-1 text-[11px]"
+                className="border-border text-ink-muted hover:bg-surface-raised hover:text-ink rounded-md border px-2.5 py-1 text-label"
               >
                 Cancel
               </Button>
@@ -453,7 +453,7 @@ function TransitionBody({
                   removeTransition(transition.id);
                   announce(`Removed the transition from ${from.title} to ${to.title}.`);
                 }}
-                className="border-danger text-danger hover:bg-danger/15 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium"
+                className="border-danger text-danger hover:bg-danger/15 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-label font-medium"
               >
                 <Trash2 size={12} aria-hidden="true" />
                 Confirm remove
@@ -462,7 +462,7 @@ function TransitionBody({
           ) : (
             <Button
               onPress={() => setIsConfirmingRemove(true)}
-              className="border-border text-ink-muted hover:border-danger/40 hover:text-danger flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px]"
+              className="border-border text-ink-muted hover:border-danger/40 hover:text-danger flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-label"
             >
               <Trash2 size={12} aria-hidden="true" />
               Remove transition
@@ -470,7 +470,7 @@ function TransitionBody({
           )}
         </div>
 
-        <p className="text-ink-subtle mt-1.5 text-[10px]">
+        <p className="text-ink-subtle mt-1.5 text-meta">
           {isConfirmingRemove
             ? "This deletes the edge from the graph. The two tracks stay put."
             : "Edits apply immediately; there is no save endpoint yet."}
@@ -521,8 +521,8 @@ function TransitionEnd({ track, role }: { track: WorkspaceTrack; role: string })
         {/* The arrow is the only visual cue for direction; without this a
             screen reader hears two titles and no ordering. */}
         <span className="sr-only">{role}: </span>
-        <Truncate className="text-ink text-[12px] font-medium">{track.title}</Truncate>
-        <Truncate className="text-ink-muted text-[11px]">{track.artist}</Truncate>
+        <Truncate className="text-ink text-body font-medium">{track.title}</Truncate>
+        <Truncate className="text-ink-muted text-label">{track.artist}</Truncate>
       </div>
     </div>
   );

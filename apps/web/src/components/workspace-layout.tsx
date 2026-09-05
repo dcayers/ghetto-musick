@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,9 +11,10 @@ import {
   type ReactNode,
 } from "react";
 import { Button, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
-import { Library, ListOrdered, Share2, SlidersHorizontal } from "lucide-react";
+import { Library, ListOrdered, Share2, SlidersHorizontal, X } from "lucide-react";
 import { cx } from "./primitives.js";
 import { IconButton } from "./ui.js";
+import { BoothView } from "./booth-view.js";
 import {
   PANEL_LIMITS,
   useWorkspace,
@@ -67,19 +69,38 @@ export function WorkspaceLayout({
 }: WorkspaceLayoutProps): JSX.Element {
   const mode = useLayoutMode();
   const surfaces = { library, graph, timeline, inspector };
+  const boothOpen = useWorkspace((state) => state.boothOpen);
+  const setBoothOpen = useWorkspace((state) => state.setBoothOpen);
 
   return (
     // §2: the shell is the viewport. Nothing outside a panel ever scrolls.
-    <div className="bg-canvas flex h-screen flex-col overflow-hidden">
-      <div className="shrink-0">{nav}</div>
+    <div className="bg-canvas relative flex h-screen flex-col overflow-hidden">
+      {/*
+       * The booth renders *over* the shell, not instead of it.
+       *
+       * Returning it early unmounted everything below, and `StatusRegion` is
+       * the app's only live region and the only consumer of `status` — so
+       * every announcement the booth made went nowhere, and the message left
+       * behind popped as a stale toast on the way back. Unmounting also threw
+       * away the compact layout's active tab and the React Flow viewport.
+       *
+       * Kept mounted and hidden: `inert` takes the whole desk out of the tab
+       * order and the accessibility tree while the booth is up, which is the
+       * behaviour the early return was reaching for without the side effects.
+       */}
+      <div className="contents" inert={boothOpen}>
+        <div className="shrink-0">{nav}</div>
 
-      {mode === "compact" ? (
-        <CompactLayout {...surfaces} />
-      ) : mode === "medium" ? (
-        <MediumLayout {...surfaces} />
-      ) : (
-        <WideLayout {...surfaces} />
-      )}
+        {mode === "compact" ? (
+          <CompactLayout {...surfaces} />
+        ) : mode === "medium" ? (
+          <MediumLayout {...surfaces} />
+        ) : (
+          <WideLayout {...surfaces} />
+        )}
+      </div>
+
+      {boothOpen && <BoothView onExit={() => setBoothOpen(false)} />}
 
       <StatusRegion />
     </div>
@@ -340,8 +361,8 @@ function CompactLayout({ library, graph, timeline, inspector }: Surfaces) {
             id={id}
             className={({ isSelected }) =>
               cx(
-                "flex flex-1 cursor-pointer flex-col items-center gap-1 pt-1.5 pb-2 text-[11px] transition-colors",
-                isSelected ? "text-accent" : "text-ink-muted",
+                "flex flex-1 cursor-pointer flex-col items-center gap-1 pt-1.5 pb-2 text-label transition-colors",
+                isSelected ? "text-accent-text" : "text-ink-muted",
               )
             }
           >
@@ -567,13 +588,107 @@ function Resizer({ panel, axis, invert = false, className }: ResizerProps) {
 function StatusRegion() {
   const status = useWorkspace((state) => state.status);
   const statusId = useWorkspace((state) => state.statusId);
+  const announce = useWorkspace((state) => state.announce);
+  const [dismissedId, setDismissedId] = useState<number | null>(null);
+
+  const isFailure = status?.tone === "failure";
+  const visible = status !== null && dismissedId !== statusId;
+
+  /*
+   * Informational messages clear themselves; failures do not.
+   *
+   * A failure that fades is a failure the DJ can miss entirely, and this is
+   * the surface that reports a rolled-back write — the one thing they must
+   * not learn about by noticing later. Successes are the opposite: leaving
+   * "Added to the set" on screen turns confirmation into clutter.
+   */
+  const offersUndo = status?.undo !== undefined;
+
+  useEffect(() => {
+    // An offer the reader has to be given time to take is not a confirmation.
+    if (status === null || isFailure || offersUndo) return undefined;
+    const timer = window.setTimeout(() => setDismissedId(statusId), 6000);
+    return () => window.clearTimeout(timer);
+  }, [status, statusId, isFailure, offersUndo]);
+
   return (
-    <div role="status" aria-live="polite" className="sr-only">
-      {/* Keyed on the announce counter, not the message. A live region only
-          speaks when its content changes, so pressing the same inert control
-          twice used to be silent — the second announce wrote an equal string
-          and the text node never mutated. Re-keying mounts a fresh node. */}
-      <span key={statusId}>{status}</span>
-    </div>
+    <>
+      {/* The live region proper: one per document, mounted for the life of the
+          app and never conditionally rendered, because a region added at the
+          same time as its text is not announced (§17). The visible surface
+          below is a separate node, so dismissing it never mutes the reader. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {/* Keyed on the announce counter, not the message. A live region only
+            speaks when its content changes, so pressing the same inert control
+            twice used to be silent — the second announce wrote an equal string
+            and the text node never mutated. Re-keying mounts a fresh node. */}
+        <span key={statusId}>
+          {status === null ? "" : isFailure ? `Failed: ${status.message}` : status.message}
+        </span>
+      </div>
+
+      {visible && status !== null && (
+        <div
+          /*
+           * Not aria-hidden.
+           *
+           * It was, on the reasoning that the live region above already speaks
+           * the message and two nodes would say it twice. But this container
+           * holds focusable controls, and `aria-hidden` over a focusable
+           * subtree is invalid ARIA: the buttons stay in the tab order while
+           * being absent from the accessibility tree, so a screen-reader user
+           * lands on an Undo they are never told about — the one recovery the
+           * whole surface exists to offer.
+           *
+           * The duplicate-speech problem is solved where it actually lives:
+           * the *message text* below carries `aria-hidden`, since the live
+           * region announces it, while the controls stay reachable and named.
+           */
+          className={cx(
+            // Above the booth overlay (z-50), not below it. The booth is the
+            // one surface that announces without any other visible feedback,
+            // so a toast occluded by it is a toast that does not exist.
+            "bg-surface-overlay rounded-card pointer-events-auto fixed right-3 bottom-3 z-[60] flex max-w-[380px] items-start gap-2 border py-2 pr-2 pl-3 shadow-lg shadow-black/40",
+            // The word carries the severity; the hue only reinforces it (§17).
+            isFailure ? "border-danger/50" : "border-border",
+          )}
+        >
+          {/* The text is hidden from AT, not the container: the live region
+              above is already speaking exactly this sentence. */}
+          {isFailure && (
+            <span aria-hidden="true" className="text-danger mt-px shrink-0 text-label font-medium">
+              Failed
+            </span>
+          )}
+          <p aria-hidden="true" className="text-ink min-w-0 flex-1 text-label leading-relaxed">
+            {status.message}
+          </p>
+
+          {status.undo && (
+            <Button
+              onPress={() => {
+                status.undo?.();
+                setDismissedId(statusId);
+                announce("Undone.");
+              }}
+              // Named for what it undoes. "Undo" alone, reached by tab with no
+              // surrounding context, does not say what is about to change.
+              aria-label={`${status.undoLabel ?? "Undo"}: ${status.message}`}
+              className="text-accent-text hover:bg-accent-muted rounded-control shrink-0 px-1.5 py-0.5 text-label font-medium"
+            >
+              {status.undoLabel ?? "Undo"}
+            </Button>
+          )}
+
+          <Button
+            onPress={() => setDismissedId(statusId)}
+            aria-label="Dismiss message"
+            className="text-ink-subtle hover:bg-surface-hover hover:text-ink rounded-control grid size-5 shrink-0 place-items-center"
+          >
+            <X size={12} aria-hidden="true" />
+          </Button>
+        </div>
+      )}
+    </>
   );
 }

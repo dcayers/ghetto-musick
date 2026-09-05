@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -11,6 +17,7 @@ import {
   type Node as RFNode,
   type NodeChange,
   type OnMove,
+  type Connection,
   type OnSelectionChangeFunc,
 } from "@xyflow/react";
 import { Button } from "react-aria-components";
@@ -19,7 +26,13 @@ import { buildTrackGraph } from "@flowgraph/domain";
 
 import { NODE_HEIGHT, NODE_WIDTH, TrackNode, type TrackNodeData } from "./track-node.js";
 import { TransitionEdge, type TransitionEdgeData } from "./transition-edge.js";
-import { CanvasToolbar, CanvasZoomControls, type CanvasTool } from "../canvas-tools.js";
+import {
+  CanvasToolbar,
+  CanvasZoomControls,
+  isTypingTarget,
+  type CanvasTool,
+} from "../canvas-tools.js";
+import { suggestTechnique } from "../../lib/suggest-technique.js";
 import { EmptyState } from "../primitives.js";
 import { IconButton } from "../ui.js";
 import { setTrackIds, techniqueSpec } from "../../lib/workspace-data.js";
@@ -108,7 +121,9 @@ interface ProjectionInput {
  * The direction matters. Nodes are projected from the store's placements (they
  * carry position, which the model does not), but *edges are only ever read back
  * out of the model* — that is what makes the invariants it enforces (directed,
- * no self-loops, one edge per ordered pair) hold on screen too.
+ * no self-loops, one edge per transition id) hold on screen too. Several
+ * transitions may share an ordered pair when their techniques differ, which is
+ * what the multi graph is for.
  */
 function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEdge[] } {
   const {
@@ -202,6 +217,22 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
     },
   }));
 
+  /*
+   * How many routes share each ordered pair, and which one this is.
+   *
+   * The graph is a multi graph — A→B via a long blend and A→B via an echo out
+   * are two different routes, which is the point. But two edges between the
+   * same two nodes compute the same bezier, so without a per-edge offset the
+   * second is drawn exactly under the first: invisible, unclickable, and
+   * indistinguishable from the transition having silently failed to save.
+   */
+  const pairTotals = new Map<string, number>();
+  model.forEachDirectedEdge((_key, _attributes, source, target) => {
+    const pair = `${source} ${target}`;
+    pairTotals.set(pair, (pairTotals.get(pair) ?? 0) + 1);
+  });
+  const pairSeen = new Map<string, number>();
+
   const edges: CanvasEdge[] = [];
   model.forEachDirectedEdge((_key, attributes, source, target) => {
     const sourceNodeId = nodeIdByTrack.get(source);
@@ -232,6 +263,17 @@ function project(input: ProjectionInput): { nodes: CanvasNode[]; edges: CanvasEd
       data: {
         transitionId: transition.id,
         technique: transition.technique,
+        // Zero for a lone route; ±1, ±2 … for parallel ones, so each gets its
+        // own arc and its own label position.
+        parallelOffset: (() => {
+          const pair = `${source} ${target}`;
+          const total = pairTotals.get(pair) ?? 1;
+          if (total === 1) return 0;
+          const seen = pairSeen.get(pair) ?? 0;
+          pairSeen.set(pair, seen + 1);
+          // Spread symmetrically about the direct line: 0, +1, -1, +2, -2 …
+          return seen === 0 ? 0 : Math.ceil(seen / 2) * (seen % 2 === 1 ? 1 : -1);
+        })(),
         inActiveSet: activeSetTransitionIds.has(transition.id),
         isAiSuggested: transition.origin === "ai",
         hasWarning: transition.warnings.length > 0,
@@ -316,7 +358,7 @@ function PendingAction({ label }: { label: string }) {
       <Button
         isDisabled
         aria-label={`${label}. ${UNAVAILABLE}.`}
-        className="border-border text-ink-muted rounded-control border px-2.5 py-1 text-xs disabled:opacity-50"
+        className="border-border text-ink-muted rounded-control border px-2.5 py-1 text-body disabled:opacity-50"
       >
         {label}
       </Button>
@@ -350,6 +392,15 @@ function Canvas() {
 
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<CanvasTool>("select");
+  /**
+   * The track a keyboard connection started from, or null.
+   *
+   * A drag is the one gesture a keyboard cannot make, so §9.9's keyboard parity
+   * needs a two-step route: arm from the selected node, then pick the target.
+   * React Flow already gives every node focus and an Enter/Space activation, so
+   * this only has to remember the first half.
+   */
+  const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const seratoImport = useSeratoImport();
@@ -407,6 +458,18 @@ function Canvas() {
     // measurements React Flow needs to consider a node initialised.
     setNodes((current) => adoptProjection(current, projection.nodes));
   }
+
+  /**
+   * Node id to track id.
+   *
+   * React Flow speaks in node ids; the transition API speaks in track ids. The
+   * two are never the same value, and conflating them is the failure this map
+   * exists to make impossible.
+   */
+  const trackIdByNodeId = useMemo(
+    () => new Map(nodes.map((node) => [node.id, node.data.trackId])),
+    [nodes],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => {
@@ -477,18 +540,165 @@ function Canvas() {
     [setMultiSelection, selectTrack, selectTransition],
   );
 
+  /**
+   * Draws a transition, choosing its technique from the pair.
+   *
+   * Shared by the pointer gesture and the keyboard route so both produce
+   * exactly the same record — a keyboard path that created a subtly different
+   * transition would be a second implementation waiting to drift.
+   */
+  const connectTracks = useCallback(
+    (sourceTrackId: string, targetTrackId: string) => {
+      const state = useWorkspace.getState();
+      const from = state.tracks.find((track) => track.id === sourceTrackId);
+      const to = state.tracks.find((track) => track.id === targetTrackId);
+      if (!from || !to) {
+        state.announceFailure("That track is not in this workspace.");
+        return;
+      }
+
+      const suggestion = suggestTechnique(from, to);
+      const refusal = state.createTransition(sourceTrackId, targetTrackId, suggestion.technique);
+
+      if (refusal !== null) {
+        state.announce(refusal);
+        return;
+      }
+
+      // The technique was inferred, and the API has no column that records
+      // that. Saying so here — once, at the moment it can be changed — is the
+      // honest alternative to a provenance claim the schema cannot carry.
+      const label = techniqueSpec(suggestion.technique).label;
+      state.announce(
+        suggestion.rationale
+          ? `Connected ${from.title} into ${to.title}. Suggested ${label} — ${suggestion.rationale}.`
+          : `Connected ${from.title} into ${to.title}. Set to ${label}; add the details in the inspector.`,
+      );
+    },
+    [],
+  );
+
+  /** Pointer route: a drag that lands on a valid handle. */
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      const sourceTrackId = trackIdByNodeId.get(connection.source);
+      const targetTrackId = trackIdByNodeId.get(connection.target);
+      if (!sourceTrackId || !targetTrackId) return;
+      connectTracks(sourceTrackId, targetTrackId);
+    },
+    [trackIdByNodeId, connectTracks],
+  );
+
+  /**
+   * Rejects a connection while it is still being dragged.
+   *
+   * React Flow paints the handle invalid rather than valid, so the refusal is
+   * visible before the mouse is released instead of arriving as a message
+   * afterwards.
+   */
+  const isValidConnection = useCallback(
+    (connection: Connection | CanvasEdge) => {
+      if (!connection.source || !connection.target) return false;
+      if (connection.source === connection.target) return false;
+
+      const sourceTrackId = trackIdByNodeId.get(connection.source);
+      const targetTrackId = trackIdByNodeId.get(connection.target);
+      return Boolean(sourceTrackId && targetTrackId && sourceTrackId !== targetTrackId);
+    },
+    [trackIdByNodeId],
+  );
+
   const handleToolChange = useCallback(
     (next: CanvasTool) => {
       setTool(next);
-      // Connect and Link have no action behind them yet. Saying so is better
-      // than a tool that silently swallows the drag you make with it.
+      if (next === "connect") {
+        // Armed even when nothing is selected yet: the first node the DJ picks
+        // becomes the source. Previously this stored null and the tool sat in a
+        // state its own announcement described but the code never implemented.
+        const from = useWorkspace.getState().selectedTrackId;
+        setConnectFrom(from);
+        announce(
+          from === null
+            ? "Connect: select a track to start from, then select the track it mixes into."
+            : "Connect armed. Select the track this one mixes into, or press Escape to cancel.",
+        );
+        return;
+      }
+      setConnectFrom(null);
       announce(
-        next === "connect" || next === "link"
-          ? "Authoring transitions on the canvas is not available yet — edit transitions in the inspector."
+        next === "link"
+          ? "Drag from a track's right edge to its next track to connect them."
           : null,
       );
     },
     [announce],
+  );
+
+  /**
+   * Escape cancels an armed connection; Backspace removes the selected track.
+   *
+   * Bound to the canvas wrapper rather than to `window` so it only fires while
+   * focus is inside the graph — the tool rail's own accelerators are global,
+   * and a second global listener taking Backspace would eat it inside every
+   * text field in the app.
+   */
+  const handleCanvasKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      /*
+       * The second half of the keyboard connect route.
+       *
+       * It used to rely on `onNodeClick`, which React Flow wires to the node
+       * div's DOM `onClick` only: its own key handler treats Enter and Space
+       * as *selection* and never calls the prop, and the wrapper is a `div`
+       * with `ariaRole="button"`, so the browser synthesises no click either.
+       * The route could be armed and never completed — reachable by pointer,
+       * dead by keyboard, which is the exact parity §9.9 requires.
+       *
+       * Read off the focused node's own `data-id` instead, which is what
+       * React Flow puts there and what its focus actually moves between.
+       */
+      if (connectFrom !== null && (event.key === "Enter" || event.key === " ")) {
+        const nodeId = (event.target as HTMLElement | null)
+          ?.closest(".react-flow__node")
+          ?.getAttribute("data-id");
+        const targetTrackId = nodeId ? trackIdByNodeId.get(nodeId) : undefined;
+        if (targetTrackId) {
+          event.preventDefault();
+          event.stopPropagation();
+          const from = connectFrom;
+          setConnectFrom(null);
+          setTool("select");
+          connectTracks(from, targetTrackId);
+          return;
+        }
+      }
+
+      if (event.key === "Escape" && connectFrom !== null) {
+        event.stopPropagation();
+        setConnectFrom(null);
+        setTool("select");
+        announce("Connection cancelled.");
+        return;
+      }
+
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      if (isTypingTarget(event.target)) return;
+
+      const state = useWorkspace.getState();
+      const trackId = state.selectedTrackId;
+      if (trackId === null) return;
+
+      const node = state.nodes.find((candidate) => candidate.trackId === trackId);
+      const track = state.tracks.find((candidate) => candidate.id === trackId);
+      if (!node) return;
+
+      event.preventDefault();
+      // The store owns the announcement here: it is the only place holding the
+      // captured node and its severed transitions, so it is the only place that
+      // can offer a recovery that actually restores them.
+      state.removeNode(node.id, track?.title ?? null);
+    },
+    [connectFrom, announce, trackIdByNodeId, connectTracks],
   );
 
   const handleMove: OnMove = useCallback((_event, viewport) => {
@@ -581,6 +791,7 @@ function Canvas() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
+      onKeyDown={handleCanvasKeyDown}
     >
       <ReactFlow<CanvasNode, CanvasEdge>
         nodes={nodes}
@@ -595,6 +806,17 @@ function Canvas() {
           // reports the resulting set. Setting the primary selection here would
           // clear the multi-selection the same gesture just built.
           if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+
+          // Completing an armed connection takes priority over selecting: the
+          // second half of the keyboard route arrives as an ordinary node
+          // activation, whether it came from Enter or from a pointer.
+          if (connectFrom !== null) {
+            const target = node.data.trackId;
+            setConnectFrom(null);
+            setTool("select");
+            connectTracks(connectFrom, target);
+            return;
+          }
           selectTrack(node.data.trackId);
         }}
         // Edge ids are transition ids by construction in `project`.
@@ -623,13 +845,19 @@ function Canvas() {
         // broken one.
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
-        // There is no remove-node action in the store, and a Delete key that
-        // takes edges but leaves nodes is worse than one that does nothing.
-        // Removal belongs to the inspector, where it can be confirmed.
+        // Removal stays off React Flow's own delete path so it goes through the
+        // store, which announces it with an undo rather than mutating the
+        // projection behind it. There is no confirm dialog by design — the undo
+        // is the safety. `Backspace` on a selected node is handled above.
         deleteKeyCode={null}
-        // Handles would be a live affordance with nothing behind them until the
-        // store can create a transition.
-        nodesConnectable={false}
+        onConnect={handleConnect}
+        isValidConnection={isValidConnection}
+        // Connecting starts on a handle, so it never competes with pan or
+        // marquee, which start on the canvas. Live in every tool mode except
+        // pan, where a drag must always move the viewport. Each node renders
+        // one source and one target handle, near-invisible until the node is
+        // hovered or focused.
+        nodesConnectable={tool !== "pan"}
         // The rail drives React Flow's own interaction modes rather than running
         // a parallel implementation of pan and marquee.
         panOnDrag={tool === "box-select" ? PAN_BUTTONS : true}
@@ -744,7 +972,7 @@ function Canvas() {
                     isDisabled={!seratoImport.isAvailable || seratoImport.isImporting}
                     aria-label={seratoImport.label}
                     onPress={seratoImport.run}
-                    className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control border px-2.5 py-1 text-xs transition-colors disabled:opacity-50"
+                    className="border-border text-ink-muted hover:border-border-strong hover:text-ink rounded-control border px-2.5 py-1 text-body transition-colors disabled:opacity-50"
                   >
                     {seratoImport.isImporting ? "Reading library…" : "Import from Serato"}
                   </Button>

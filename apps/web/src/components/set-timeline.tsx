@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronsDownUp,
+  Headphones,
   Maximize2,
   ListPlus,
   Minimize2,
@@ -265,7 +266,7 @@ export function SetTimeline() {
         <span className="flex items-baseline gap-2 whitespace-nowrap">
           Set Timeline
           {slots.length > 0 && (
-            <span className="text-ink-subtle text-xs font-normal tabular-nums">
+            <span className="text-ink-subtle text-body font-normal tabular-nums">
               {slots.length} track{slots.length === 1 ? "" : "s"} ·{" "}
               {formatDuration(setDuration(set, tracks, transitions))}
             </span>
@@ -279,6 +280,15 @@ export function SetTimeline() {
       }
       actions={
         <>
+          <IconButton
+            icon={Headphones}
+            label="Open booth view"
+            isDisabled={slots.length === 0}
+            onPress={() => {
+              useWorkspace.getState().setBoothOpen(true);
+            }}
+          />
+
           <Select
             aria-label="Overlay metric"
             selectedKey={overlayMetric}
@@ -287,7 +297,7 @@ export function SetTimeline() {
             }}
             isDisabled={slots.length === 0}
           >
-            <Button className="border-border bg-surface-raised text-ink hover:border-border-strong rounded-control flex items-center gap-1.5 border px-2 py-1 text-[11px] outline-none disabled:opacity-50">
+            <Button className="border-border bg-surface-raised text-ink hover:border-border-strong rounded-control flex items-center gap-1.5 border px-2 py-1 text-label outline-none disabled:opacity-50">
               <SelectValue />
               <ChevronDown size={12} aria-hidden="true" />
             </Button>
@@ -299,7 +309,7 @@ export function SetTimeline() {
                     id={entry.id}
                     // `data-[selected]` rather than a `selected:` variant — that
                     // needs the React Aria Tailwind plugin, which is not installed.
-                    className="text-ink-muted data-[selected]:text-accent data-[focused]:bg-surface-raised cursor-pointer rounded px-2 py-1 text-[11px] outline-none"
+                    className="text-ink-muted data-[selected]:text-accent-text data-[focused]:bg-surface-raised cursor-pointer rounded px-2 py-1 text-label outline-none"
                   >
                     {entry.label}
                   </ListBoxItem>
@@ -372,7 +382,7 @@ export function SetTimeline() {
               `mt-auto` inside a scroller that clips whenever the cards do not
               fit. Sharing the layout removes the second box that could drift. */}
           <div
-            className="text-ink-subtle pointer-events-none flex shrink-0 flex-col justify-end pr-1.5 pb-7 text-right font-mono text-[9px] tabular-nums"
+            className="text-ink-muted pointer-events-none flex shrink-0 flex-col justify-end pr-1.5 pb-7 text-right font-mono text-meta tabular-nums"
             style={{ width: AXIS_WIDTH }}
           >
             <div
@@ -607,9 +617,9 @@ function TrackSlotWithLink({
               <Artwork seed={track.id} size={32} />
               <span
                 className={cx(
-                  "absolute -top-1.5 -right-1.5 grid size-[17px] place-items-center rounded-full border text-[9px] font-semibold tabular-nums",
+                  "absolute -top-1.5 -right-1.5 grid size-[19px] place-items-center rounded-full border text-meta font-semibold tabular-nums",
                   isSelected
-                    ? "border-accent bg-accent text-white"
+                    ? "border-accent bg-accent-strong text-white"
                     : "border-border bg-surface text-ink-muted",
                 )}
               >
@@ -619,8 +629,8 @@ function TrackSlotWithLink({
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <Truncate className="text-ink text-[11px] font-medium">{track.title}</Truncate>
-              <Truncate className="text-ink-muted text-[10px]">{track.artist}</Truncate>
+              <Truncate className="text-ink text-label font-medium">{track.title}</Truncate>
+              <Truncate className="text-ink-muted text-meta">{track.artist}</Truncate>
             </div>
           </div>
 
@@ -636,7 +646,7 @@ function TrackSlotWithLink({
             <Bpm value={track.bpm} />
             <CamelotKey value={track.keySignature} />
             <EnergyDots value={track.energy} size={4} />
-            <span className="text-ink-subtle ml-auto font-mono text-[10px] tabular-nums">
+            <span className="text-ink-subtle ml-auto font-mono text-meta tabular-nums">
               {formatDuration(track.durationSeconds)}
             </span>
           </div>
@@ -775,7 +785,7 @@ function AddTransitionBlock({
       <Button
         onPress={onPress}
         aria-label={label}
-        className="border-border-strong text-ink-subtle hover:border-accent hover:text-accent grid size-5 place-items-center rounded-full border border-dashed outline-none transition-colors"
+        className="border-border-strong text-ink-subtle hover:border-accent hover:text-accent-text grid size-5 place-items-center rounded-full border border-dashed outline-none transition-colors"
       >
         <Plus size={11} aria-hidden="true" />
       </Button>

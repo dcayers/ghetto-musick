@@ -66,7 +66,10 @@ describe("buildTrackGraph", () => {
         },
       ],
     );
-    const attributes = graph.getDirectedEdgeAttributes("a", "b");
+    // Addressed by transition id, not by the pair: on a multi graph a pair can
+    // carry several edges, so `getDirectedEdgeAttributes("a", "b")` is
+    // ambiguous and graphology rejects it.
+    const attributes = graph.getEdgeAttributes("t1");
     expect(attributes.technique).toBe("long blend");
     expect(attributes.tags).toEqual(["acid"]);
     expect(attributes.confidence).toBe(0.8);
@@ -79,9 +82,42 @@ describe("buildTrackGraph", () => {
       [track("a", 128, "8A"), track("b", 128, "9A")],
       [{ id: "t1", sourceTrackId: "a", targetTrackId: "b", tags: ["old"] }],
     );
-    graph.setDirectedEdgeAttribute("a", "b", "tags", ["new"]);
-    expect(graph.getDirectedEdgeAttributes("a", "b").tags).toEqual(["new"]);
+    graph.setEdgeAttribute("t1", "tags", ["new"]);
+    expect(graph.getEdgeAttributes("t1").tags).toEqual(["new"]);
     expect(graph.size).toBe(1);
+  });
+
+  it("keeps several techniques between the same ordered pair", () => {
+    // The unique constraint on the Transition model is
+    // (workspaceId, fromTrackId, toTrackId, technique), so the database has
+    // always allowed this. A long blend and an echo out from A into B are two
+    // different routes, and preserving both is the premise of planning on a
+    // graph rather than in a list. A single-edge model dropped all but the
+    // last one, silently, on the canvas.
+    const graph = buildTrackGraph(
+      [track("a", 128, "8A"), track("b", 128, "9A")],
+      [
+        { id: "t1", sourceTrackId: "a", targetTrackId: "b", technique: "long-blend" },
+        { id: "t2", sourceTrackId: "a", targetTrackId: "b", technique: "echo-out" },
+      ],
+    );
+    expect(graph.size).toBe(2);
+    expect(graph.getEdgeAttributes("t1").technique).toBe("long-blend");
+    expect(graph.getEdgeAttributes("t2").technique).toBe("echo-out");
+  });
+
+  it("updates in place when the same transition is rebuilt", () => {
+    // Edges are keyed on transition id, so re-merging the same transition must
+    // not accumulate parallel duplicates on every rebuild.
+    const graph = buildTrackGraph(
+      [track("a", 128, "8A"), track("b", 128, "9A")],
+      [
+        { id: "t1", sourceTrackId: "a", targetTrackId: "b", technique: "blend" },
+        { id: "t1", sourceTrackId: "a", targetTrackId: "b", technique: "cut" },
+      ],
+    );
+    expect(graph.size).toBe(1);
+    expect(graph.getEdgeAttributes("t1").technique).toBe("cut");
   });
 });
 
